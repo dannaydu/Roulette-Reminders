@@ -44,4 +44,18 @@ class Todo {
           : Timestamp.fromDate(completedAt!),
     };
   }
+
+  Todo copyWith({
+    String? text,
+    String? userId,
+    DateTime? createdAt,
+    DateTime? completedAt,
+  }) {
+    return Todo(
+      text: text ?? this.text,
+      userId: userId ?? this.userId,
+      createdAt: createdAt ?? this.createdAt, 
+      completedAt: completedAt ?? this.completedAt,
+    );
+  }
 }

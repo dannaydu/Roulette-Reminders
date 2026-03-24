@@ -15,12 +15,16 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _authService = AuthService();
   final _controller = TextEditingController();
+  final _searcbhController = TextEditingController();
   final _todosRef = FirebaseFirestore.instance
       .collection('todos')
       .withConverter<Todo>(
         fromFirestore: (snapshot, _) => Todo.fromSnapshot(snapshot),
         toFirestore: (todo, _) => todo.toSnapshot(),
       );
+  
+  bool _isDescending = true;
+  String _searchQuery = '';
 
   String? _extractUrl(String text) {
     return RegExp(r'https?://\S+').stringMatch(text);
@@ -29,6 +33,7 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     _controller.dispose();
+    _searcbhController.dispose();
     super.dispose();
   }
 
@@ -50,19 +55,43 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: Column(
         children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: TextField(
+              controller: _searcbhController,
+              onChanged: (value) {
+                setState(() {
+                  _searchQuery = value.trim().toLowerCase();
+                });
+              },
+              decoration: InputDecoration(
+                hintText: 'Search...',
+                border: OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _isDescending = !_isDescending;
+                    });
+                  },
+                  icon: Icon(_isDescending ? Icons.arrow_downward : Icons.arrow_upward),
+                ),
+              ),
+            ),
+          ),  
           Expanded(
             child: userId == null
                 ? const Center(child: Text('Sign in to view your todos.'))
                 : StreamBuilder<QuerySnapshot<Todo>>(
                     stream: _todosRef
                         .where('userId', isEqualTo: userId)
-                        .orderBy('createdAt', descending: true)
+                        .orderBy('createdAt', descending: _isDescending)
+                        .where( 'text', isGreaterThanOrEqualTo: _searchQuery,
+                                isLessThan: _searchQuery + 'z')
                         .snapshots(),
                     builder: (context, snapshot) {
                       if (snapshot.hasError) {
                         final errorMessage = snapshot.error.toString();
                         final indexUrl = _extractUrl(errorMessage);
-
                         return SingleChildScrollView(
                           padding: const EdgeInsets.all(16),
                           child: Column(
