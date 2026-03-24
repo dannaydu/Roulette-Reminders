@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:todo/services/auth_service.dart';
 import 'package:todo/todo.dart';
@@ -115,10 +116,39 @@ class _HomeScreenState extends State<HomeScreen> {
                           return Card(
                             margin: const EdgeInsets.only(bottom: 12),
                             child: ListTile(
-                              leading: const Icon(
-                                Icons.check_box_outline_blank,
+                              title: Text(
+                                todo.text,
+                                style: TextStyle(
+                                  decoration: todo.completedAt != null
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                ),
                               ),
-                              title: Text(todo.text),
+                              subtitle: Text(
+                                'Created at: ${todo.createdAt.toLocal()}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
+                              leading: Checkbox(value: todo.completedAt != null, 
+                              onChanged: (value) {
+                                final updatedTodo = Todo(
+                                  text: todo.text,
+                                  userId: todo.userId,
+                                  createdAt: todo.createdAt,
+                                  completedAt: value == true ? DateTime.now() : null,
+                                );
+
+                                FirebaseFirestore.instance
+                                    .collection('todos')
+                                    .doc(todos[index].id)
+                                    .update(updatedTodo.toSnapshot());
+                              }
+                                
+                                // Handle checkbox change
+                              ),
+                              
                             ),
                           );
                         },
