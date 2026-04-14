@@ -1,8 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:todo/services/auth_service.dart';
+import 'package:todo/screens/todo_detail_screen.dart';
 import 'package:todo/todo.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -22,7 +22,7 @@ class _HomeScreenState extends State<HomeScreen> {
         fromFirestore: (snapshot, _) => Todo.fromSnapshot(snapshot),
         toFirestore: (todo, _) => todo.toSnapshot(),
       );
-  
+
   bool _isDescending = true;
   String _searchQuery = '';
 
@@ -73,11 +73,13 @@ class _HomeScreenState extends State<HomeScreen> {
                       _isDescending = !_isDescending;
                     });
                   },
-                  icon: Icon(_isDescending ? Icons.arrow_downward : Icons.arrow_upward),
+                  icon: Icon(
+                    _isDescending ? Icons.arrow_downward : Icons.arrow_upward,
+                  ),
                 ),
               ),
             ),
-          ),  
+          ),
           Expanded(
             child: userId == null
                 ? const Center(child: Text('Sign in to view your todos.'))
@@ -85,8 +87,11 @@ class _HomeScreenState extends State<HomeScreen> {
                     stream: _todosRef
                         .where('userId', isEqualTo: userId)
                         .orderBy('createdAt', descending: _isDescending)
-                        .where( 'text', isGreaterThanOrEqualTo: _searchQuery,
-                                isLessThan: _searchQuery + 'z')
+                        .where(
+                          'text',
+                          isGreaterThanOrEqualTo: _searchQuery,
+                          isLessThan: '${_searchQuery}z',
+                        )
                         .snapshots(),
                     builder: (context, snapshot) {
                       if (snapshot.hasError) {
@@ -140,11 +145,21 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         itemCount: todos.length,
                         itemBuilder: (context, index) {
-                          final todo = todos[index].data();
+                          final todoSnapshot = todos[index];
+                          final todo = todoSnapshot.data();
 
                           return Card(
                             margin: const EdgeInsets.only(bottom: 12),
                             child: ListTile(
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) => TodoDetailScreen(
+                                      todoId: todoSnapshot.id,
+                                    ),
+                                  ),
+                                );
+                              },
                               title: Text(
                                 todo.text,
                                 style: TextStyle(
@@ -160,24 +175,24 @@ class _HomeScreenState extends State<HomeScreen> {
                                   color: Colors.grey[600],
                                 ),
                               ),
-                              leading: Checkbox(value: todo.completedAt != null, 
-                              onChanged: (value) {
-                                final updatedTodo = Todo(
-                                  text: todo.text,
-                                  userId: todo.userId,
-                                  createdAt: todo.createdAt,
-                                  completedAt: value == true ? DateTime.now() : null,
-                                );
+                              leading: Checkbox(
+                                value: todo.completedAt != null,
+                                onChanged: (value) {
+                                  final updatedTodo = Todo(
+                                    text: todo.text,
+                                    userId: todo.userId,
+                                    createdAt: todo.createdAt,
+                                    completedAt: value == true
+                                        ? DateTime.now()
+                                        : null,
+                                  );
 
-                                FirebaseFirestore.instance
-                                    .collection('todos')
-                                    .doc(todos[index].id)
-                                    .update(updatedTodo.toSnapshot());
-                              }
-                                
-                                // Handle checkbox change
+                                  FirebaseFirestore.instance
+                                      .collection('todos')
+                                      .doc(todoSnapshot.id)
+                                      .update(updatedTodo.toSnapshot());
+                                },
                               ),
-                              
                             ),
                           );
                         },
