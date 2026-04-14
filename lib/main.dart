@@ -21,12 +21,71 @@ class MainApp extends StatelessWidget {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'Todo App',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-        useMaterial3: true,
-      ),
-      darkTheme: ThemeData(useMaterial3: true, colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue, brightness: Brightness.dark)),
+      theme: _buildAppTheme(Brightness.light),
+      darkTheme: _buildAppTheme(Brightness.dark),
       home: const AuthWrapper(),
     );
   }
+}
+
+ThemeData _buildAppTheme(Brightness brightness) {
+  final isDark = brightness == Brightness.dark;
+  final colorScheme =
+      ColorScheme.fromSeed(
+        seedColor: const Color(0xFF2F7D6D),
+        brightness: brightness,
+      ).copyWith(
+        secondary: const Color(0xFFC75B4D),
+        surface: isDark ? const Color(0xFF101815) : const Color(0xFFF7F9F8),
+      );
+
+  return ThemeData(
+    colorScheme: colorScheme,
+    scaffoldBackgroundColor: colorScheme.surface,
+    useMaterial3: true,
+    appBarTheme: AppBarTheme(
+      backgroundColor: colorScheme.surface,
+      foregroundColor: colorScheme.onSurface,
+      elevation: 0,
+      scrolledUnderElevation: 1,
+      surfaceTintColor: colorScheme.surfaceTint,
+    ),
+    cardTheme: CardThemeData(
+      clipBehavior: Clip.antiAlias,
+      color: colorScheme.surfaceContainerLowest,
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(color: colorScheme.outlineVariant),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: colorScheme.surfaceContainerLowest,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(8),
+        borderSide: BorderSide(color: colorScheme.outlineVariant),
+      ),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        minimumSize: const Size(96, 48),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(96, 48),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(8),
+        ),
+      ),
+    ),
+  );
 }

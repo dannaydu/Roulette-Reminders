@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:todo/services/notification_service.dart';
 import 'package:todo/todo.dart';
+import 'package:todo/widgets/responsive_frame.dart';
 
 class TodoDetailScreen extends StatefulWidget {
   const TodoDetailScreen({
@@ -306,6 +307,63 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     );
   }
 
+  Widget _buildTimeline(Todo todo) {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      children: [
+        _buildTimestamp(
+          icon: Icons.add_circle_outline,
+          label: 'Created',
+          value: _formatDateTime(todo.createdAt),
+        ),
+        if (todo.completedAt != null)
+          _buildTimestamp(
+            icon: Icons.check_circle_outline,
+            label: 'Completed',
+            value: _formatDateTime(todo.completedAt!),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildTimestamp({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: colorScheme.surfaceContainerLowest,
+        border: Border.all(color: colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 18, color: colorScheme.secondary),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+              Text(value),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -325,66 +383,67 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
           ),
         ],
       ),
-      body: StreamBuilder<DocumentSnapshot<Todo>>(
-        stream: _todoRef.snapshots(),
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Center(
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text('Could not load todo: ${snapshot.error}'),
-              ),
-            );
-          }
+      body: SafeArea(
+        child: ResponsiveFrame(
+          maxWidth: 720,
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+          child: StreamBuilder<DocumentSnapshot<Todo>>(
+            stream: _todoRef.snapshots(),
+            builder: (context, snapshot) {
+              if (snapshot.hasError) {
+                return Center(
+                  child: Text('Could not load todo: ${snapshot.error}'),
+                );
+              }
 
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
 
-          final todo = snapshot.data?.data();
-          if (todo == null) {
-            return const Center(child: Text('Todo not found.'));
-          }
+              final todo = snapshot.data?.data();
+              if (todo == null) {
+                return const Center(child: Text('Todo not found.'));
+              }
 
-          if (!_hasLoadedText) {
-            _controller.text = todo.text;
-            _hasLoadedText = true;
-          }
+              if (!_hasLoadedText) {
+                _controller.text = todo.text;
+                _hasLoadedText = true;
+              }
 
-          return ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              TextField(
-                controller: _controller,
-                decoration: const InputDecoration(
-                  labelText: 'Todo text',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: null,
-                textInputAction: TextInputAction.done,
-              ),
-              const SizedBox(height: 16),
-              _buildDueAtControls(todo),
-              const SizedBox(height: 16),
-              Text('Created at: ${todo.createdAt.toLocal()}'),
-              if (todo.completedAt != null) ...[
-                const SizedBox(height: 8),
-                Text('Completed at: ${todo.completedAt!.toLocal()}'),
-              ],
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _isSaving || _isDeleting ? null : _saveTodo,
-                child: _isSaving
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Text('Save'),
-              ),
-            ],
-          );
-        },
+              return ListView(
+                children: [
+                  TextField(
+                    controller: _controller,
+                    decoration: const InputDecoration(
+                      labelText: 'Todo text',
+                    ),
+                    maxLines: null,
+                    textInputAction: TextInputAction.done,
+                  ),
+                  const SizedBox(height: 18),
+                  _buildDueAtControls(todo),
+                  const SizedBox(height: 18),
+                  _buildTimeline(todo),
+                  const SizedBox(height: 24),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: FilledButton.icon(
+                      onPressed: _isSaving || _isDeleting ? null : _saveTodo,
+                      icon: _isSaving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save),
+                      label: const Text('Save'),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }

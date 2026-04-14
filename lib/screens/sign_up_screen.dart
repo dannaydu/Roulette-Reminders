@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:todo/widgets/responsive_frame.dart';
 import '../services/auth_service.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -54,8 +55,11 @@ class _SignUpScreenState extends State<SignUpScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
+        child: ResponsiveFrame(
+          maxWidth: 420,
+          padding: const EdgeInsets.all(24),
+          alignment: Alignment.center,
+          expandHeight: false,
           child: SingleChildScrollView(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
@@ -133,12 +137,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   enabled: !_isLoading,
                 ),
                 const SizedBox(height: 24),
-                ElevatedButton(
+                FilledButton(
                   onPressed: _isLoading ? null : _handleSignUp,
-                  style: ElevatedButton.styleFrom(
+                  style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
-                    backgroundColor: Colors.blue,
-                    disabledBackgroundColor: Colors.grey,
                   ),
                   child: _isLoading
                       ? const SizedBox(
@@ -146,8 +148,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           width: 20,
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              Colors.white,
+                            ),
                           ),
                         )
                       : const Text(
@@ -169,7 +172,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                       child: Text(
                         'Sign In',
                         style: TextStyle(
-                          color: Colors.blue,
+                          color: Theme.of(context).colorScheme.primary,
                           fontWeight: FontWeight.bold,
                           decoration: TextDecoration.underline,
                         ),
