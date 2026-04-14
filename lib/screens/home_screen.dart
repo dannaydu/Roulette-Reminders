@@ -169,7 +169,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                               ),
                               subtitle: Text(
-                                'Created at: ${todo.createdAt.toLocal()}',
+                                todo.dueAt == null
+                                    ? 'Created at: ${todo.createdAt.toLocal()}'
+                                    : 'Due at: ${todo.dueAt!.toLocal()}',
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: Colors.grey[600],
@@ -178,10 +180,7 @@ class _HomeScreenState extends State<HomeScreen> {
                               leading: Checkbox(
                                 value: todo.completedAt != null,
                                 onChanged: (value) {
-                                  final updatedTodo = Todo(
-                                    text: todo.text,
-                                    userId: todo.userId,
-                                    createdAt: todo.createdAt,
+                                  final updatedTodo = todo.copyWith(
                                     completedAt: value == true
                                         ? DateTime.now()
                                         : null,
