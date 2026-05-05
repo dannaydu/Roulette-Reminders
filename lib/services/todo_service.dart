@@ -1,6 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:todo/services/casino_service.dart';
 import 'package:todo/services/notification_service.dart';
 import 'package:todo/todo.dart';
+
+class TodoCompletionResult {
+  const TodoCompletionResult({
+    required this.spinAwarded,
+  });
+
+  final bool spinAwarded;
+}
 
 class TodoService {
   TodoService._();
@@ -16,12 +25,13 @@ class TodoService {
 
   CollectionReference<Todo> get todosRef => _todosRef;
 
-  Future<void> toggleCompletion({
+  Future<TodoCompletionResult> toggleCompletion({
     required String todoId,
     required Todo todo,
     required bool isCompleted,
   }) async {
     final now = DateTime.now();
+    final isNewCompletion = isCompleted && !todo.isCompleted;
     final todoRef = _todosRef.doc(todoId);
     final batch = FirebaseFirestore.instance.batch();
 
@@ -62,6 +72,18 @@ class TodoService {
       });
     }
 
+    if (isNewCompletion && todo.userId.isNotEmpty) {
+      batch.set(
+        CasinoService.instance.profileRef(todo.userId),
+        {
+          'pendingSpins': FieldValue.increment(1),
+          'spinsEarned': FieldValue.increment(1),
+          'updatedAt': Timestamp.fromDate(now),
+        },
+        SetOptions(merge: true),
+      );
+    }
+
     await batch.commit();
 
     if (isCompleted) {
@@ -84,6 +106,10 @@ class TodoService {
         dueAt: nextOccurrence.dueAt!,
       );
     }
+
+    return TodoCompletionResult(
+      spinAwarded: isNewCompletion,
+    );
   }
 
   DateTime _nextDueAt({

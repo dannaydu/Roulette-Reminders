@@ -3,10 +3,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:todo/screens/todo_detail_screen.dart';
 import 'package:todo/services/auth_service.dart';
+import 'package:todo/services/casino_service.dart';
 import 'package:todo/services/daily_overview_service.dart';
 import 'package:todo/services/todo_service.dart';
 import 'package:todo/todo.dart';
 import 'package:todo/widgets/responsive_frame.dart';
+import 'package:todo/widgets/roulette_spin_dialog.dart';
 
 enum _TodoStatusFilter {
   all,
@@ -66,7 +68,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Todos'),
+        title: const Text('Flow State'),
         actions: [
           IconButton(
             tooltip: 'Sign out',
@@ -77,86 +79,112 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: ResponsiveFrame(
-          maxWidth: 920,
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: userId == null
-              ? _buildEmptyState(
-                  icon: Icons.lock_outline,
-                  text: 'Sign in to view your todos.',
-                )
-              : StreamBuilder<QuerySnapshot<Todo>>(
-                  stream: _todosRef
-                      .where('userId', isEqualTo: userId)
-                      .snapshots(),
-                  builder: (context, snapshot) {
-                    if (snapshot.hasError) {
-                      return Center(
-                        child: Text('Could not load todos: ${snapshot.error}'),
-                      );
-                    }
-
-                    if (snapshot.connectionState == ConnectionState.waiting) {
-                      return const Center(child: CircularProgressIndicator());
-                    }
-
-                    final entries = (snapshot.data?.docs ?? [])
-                        .map(
-                          (snapshot) => _TodoEntry(
-                            id: snapshot.id,
-                            todo: snapshot.data(),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Theme.of(context).colorScheme.surface,
+              Theme.of(context).colorScheme.primary.withValues(alpha: 0.08),
+            ],
+          ),
+        ),
+        child: SafeArea(
+          child: ResponsiveFrame(
+            maxWidth: 920,
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+            child: userId == null
+                ? _buildEmptyState(
+                    icon: Icons.lock_outline,
+                    text: 'Sign in to view your todos.',
+                  )
+                : StreamBuilder<QuerySnapshot<Todo>>(
+                    stream: _todosRef
+                        .where('userId', isEqualTo: userId)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return Center(
+                          child: Text(
+                            'Could not load todos: ${snapshot.error}',
                           ),
-                        )
-                        .toList(growable: false);
-                    final filteredEntries = _filteredEntries(entries);
-                    final visibleEntries = _view == _HomeView.calendar
-                        ? filteredEntries
-                              .where(
-                                (entry) => entry.todo.occursOnDate(
-                                  _selectedCalendarDate,
-                                ),
-                              )
-                              .toList(growable: false)
-                        : filteredEntries;
-                    final overview = _overviewService.generate(
-                      todos: entries.map((entry) => entry.todo).toList(),
-                      now: DateTime.now(),
-                    );
+                        );
+                      }
 
-                    return Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        _buildSearchField(),
-                        const SizedBox(height: 12),
-                        _buildToolbar(),
-                        const SizedBox(height: 12),
-                        _buildOverviewPanel(
-                          allEntries: entries,
-                          visibleEntries: visibleEntries,
-                          overview: overview,
-                        ),
-                        const SizedBox(height: 12),
-                        Expanded(
-                          child: _view == _HomeView.calendar
-                              ? _buildCalendarSection(filteredEntries)
-                              : visibleEntries.isEmpty
-                              ? _buildEmptyState(
-                                  icon:
-                                      _statusFilter ==
-                                          _TodoStatusFilter.completed
-                                      ? Icons.task_alt
-                                      : Icons.check_circle_outline,
-                                  text: _emptyStateMessage(entries.isEmpty),
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final entries = (snapshot.data?.docs ?? [])
+                          .map(
+                            (snapshot) => _TodoEntry(
+                              id: snapshot.id,
+                              todo: snapshot.data(),
+                            ),
+                          )
+                          .toList(growable: false);
+                      final filteredEntries = _filteredEntries(entries);
+                      final visibleEntries = _view == _HomeView.calendar
+                          ? filteredEntries
+                                .where(
+                                  (entry) => entry.todo.occursOnDate(
+                                    _selectedCalendarDate,
+                                  ),
                                 )
-                              : _buildTodoList(visibleEntries),
-                        ),
-                        const SizedBox(height: 12),
-                        _buildAddTodoBar(userId),
-                      ],
-                    );
-                  },
-                ),
+                                .toList(growable: false)
+                          : filteredEntries;
+                      final overview = _overviewService.generate(
+                        todos: entries.map((entry) => entry.todo).toList(),
+                        now: DateTime.now(),
+                      );
+
+                      return StreamBuilder<CasinoProfile>(
+                        stream: CasinoService.instance.profileStream(userId),
+                        builder: (context, rewardSnapshot) {
+                          final casinoProfile =
+                              rewardSnapshot.data ?? CasinoProfile.empty;
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              _buildSearchField(),
+                              const SizedBox(height: 12),
+                              _buildToolbar(),
+                              const SizedBox(height: 12),
+                              _buildOverviewPanel(
+                                allEntries: entries,
+                                visibleEntries: visibleEntries,
+                                overview: overview,
+                                profile: casinoProfile,
+                                userId: userId,
+                              ),
+                              const SizedBox(height: 12),
+                              Expanded(
+                                child: _view == _HomeView.calendar
+                                    ? _buildCalendarSection(filteredEntries)
+                                    : visibleEntries.isEmpty
+                                    ? _buildEmptyState(
+                                        icon:
+                                            _statusFilter ==
+                                                _TodoStatusFilter.completed
+                                            ? Icons.task_alt
+                                            : Icons.check_circle_outline,
+                                        text: _emptyStateMessage(
+                                          entries.isEmpty,
+                                        ),
+                                      )
+                                    : _buildTodoList(visibleEntries),
+                              ),
+                              const SizedBox(height: 12),
+                              _buildAddTodoBar(userId),
+                            ],
+                          );
+                        },
+                      );
+                    },
+                  ),
+          ),
         ),
       ),
     );
@@ -317,6 +345,8 @@ class _HomeScreenState extends State<HomeScreen> {
     required List<_TodoEntry> allEntries,
     required List<_TodoEntry> visibleEntries,
     required DailyOverview overview,
+    required CasinoProfile profile,
+    required String userId,
   }) {
     final openCount = allEntries
         .where((entry) => !entry.todo.isCompleted)
@@ -333,84 +363,216 @@ class _HomeScreenState extends State<HomeScreen> {
               visibleEntries.length;
 
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(10),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Theme.of(context).colorScheme.surfaceContainerLowest,
+            Theme.of(context).colorScheme.surfaceContainerHigh,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant,
+          color: Theme.of(
+            context,
+          ).colorScheme.secondary.withValues(alpha: 0.25),
+        ),
+      ),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final summary = Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  _buildStatPill('Open', '$openCount'),
+                  _buildStatPill('Completed', '$completedCount'),
+                  _buildStatPill(
+                    'Overdue',
+                    '$overdueCount',
+                    emphasized: overdueCount > 0,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Text(
+                overview.headline,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                overview.summary,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              if (overview.focusPoints.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                for (final point in overview.focusPoints.take(2)) ...[
+                  Text(
+                    '• $point',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  if (point != overview.focusPoints.take(2).last)
+                    const SizedBox(height: 4),
+                ],
+              ],
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Text(
+                    _view == _HomeView.calendar
+                        ? 'Selected day progress'
+                        : '${_statusLabel(_statusFilter)} progress',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    visibleEntries.isEmpty
+                        ? '0%'
+                        : '${(progress * 100).round()}%',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(999),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 6,
+                ),
+              ),
+            ],
+          );
+
+          final vaultCard = _buildVaultCard(profile: profile, userId: userId);
+
+          if (constraints.maxWidth < 760) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                summary,
+                const SizedBox(height: 14),
+                vaultCard,
+              ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: summary),
+              const SizedBox(width: 16),
+              SizedBox(
+                width: 250,
+                child: vaultCard,
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildVaultCard({
+    required CasinoProfile profile,
+    required String userId,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final hasSpinsReady = profile.pendingSpins > 0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            colorScheme.primary.withValues(alpha: 0.9),
+            colorScheme.primaryContainer.withValues(alpha: 0.95),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: colorScheme.secondary.withValues(alpha: 0.65),
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
+          Row(
             children: [
-              _buildStatPill('Open', '$openCount'),
-              _buildStatPill('Completed', '$completedCount'),
-              _buildStatPill(
-                'Overdue',
-                '$overdueCount',
-                emphasized: overdueCount > 0,
+              Icon(
+                Icons.casino,
+                color: colorScheme.secondary,
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Roulette Vault',
+                  style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    color: colorScheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
             ],
           ),
+          const SizedBox(height: 14),
+          Text(
+            'House Chips',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: colorScheme.onPrimaryContainer.withValues(alpha: 0.84),
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            _formatChips(profile.balance),
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              color: colorScheme.onPrimaryContainer,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
           const SizedBox(height: 12),
           Text(
-            overview.headline,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            '${profile.pendingSpins} spin${profile.pendingSpins == 1 ? '' : 's'} ready',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: colorScheme.onPrimaryContainer,
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            overview.summary,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
-          ),
-          if (overview.focusPoints.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            for (final point in overview.focusPoints.take(2)) ...[
-              Text(
-                '• $point',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+          if (profile.lastPayout > 0) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Last hit +${_formatChips(profile.lastPayout)}',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: colorScheme.secondary,
+                fontWeight: FontWeight.w700,
               ),
-              if (point != overview.focusPoints.take(2).last)
-                const SizedBox(height: 4),
-            ],
+            ),
           ],
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Text(
-                _view == _HomeView.calendar
-                    ? 'Selected day progress'
-                    : '${_statusLabel(_statusFilter)} progress',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                visibleEntries.isEmpty ? '0%' : '${(progress * 100).round()}%',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 6,
+          const SizedBox(height: 14),
+          FilledButton.icon(
+            onPressed: () => _showRouletteDialog(userId: userId),
+            style: FilledButton.styleFrom(
+              backgroundColor: colorScheme.secondary,
+              foregroundColor: colorScheme.onSecondary,
             ),
+            icon: Icon(hasSpinsReady ? Icons.local_atm : Icons.visibility),
+            label: Text(hasSpinsReady ? 'Spin Wheel' : 'View Wheel'),
           ),
         ],
       ),
@@ -981,6 +1143,10 @@ class _HomeScreenState extends State<HomeScreen> {
     ).formatShortDate(dateTime.toLocal());
   }
 
+  String _formatChips(int amount) {
+    return '$amount';
+  }
+
   void _changeDisplayedMonth(int monthDelta) {
     final nextMonth = DateTime(
       _displayedMonth.year,
@@ -1020,11 +1186,22 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     try {
-      await TodoService.instance.toggleCompletion(
+      final result = await TodoService.instance.toggleCompletion(
         todoId: todoId,
         todo: todo,
         isCompleted: value,
       );
+      if (!mounted) {
+        return;
+      }
+
+      if (result.spinAwarded) {
+        await _showRouletteDialog(
+          userId: todo.userId,
+          highlightUnlocked: true,
+          minimumPendingSpins: 1,
+        );
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -1051,6 +1228,25 @@ class _HomeScreenState extends State<HomeScreen> {
 
     await _todosRef.add(todo);
     _controller.clear();
+  }
+
+  Future<void> _showRouletteDialog({
+    required String userId,
+    bool highlightUnlocked = false,
+    int minimumPendingSpins = 0,
+  }) async {
+    if (userId.isEmpty || !mounted) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => RouletteSpinDialog(
+        userId: userId,
+        highlightUnlocked: highlightUnlocked,
+        minimumPendingSpins: minimumPendingSpins,
+      ),
+    );
   }
 
   String _priorityLabel(TodoPriority priority) {
