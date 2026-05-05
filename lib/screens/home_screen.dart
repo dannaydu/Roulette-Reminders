@@ -48,6 +48,10 @@ class _HomeScreenState extends State<HomeScreen> {
   _TodoSort _sort = _TodoSort.newest;
   _HomeView _view = _HomeView.list;
   DateTime _selectedCalendarDate = DateUtils.dateOnly(DateTime.now());
+  DateTime _displayedMonth = DateTime(
+    DateTime.now().year,
+    DateTime.now().month,
+  );
 
   @override
   void dispose() {
@@ -59,21 +63,10 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final userId = FirebaseAuth.instance.currentUser?.uid;
-    final userEmail = FirebaseAuth.instance.currentUser?.email;
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('TODO Spring 2026'),
-            if (userEmail != null && userEmail.isNotEmpty)
-              Text(
-                userEmail,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-          ],
-        ),
+        title: const Text('Todos'),
         actions: [
           IconButton(
             tooltip: 'Sign out',
@@ -86,343 +79,85 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       body: SafeArea(
         child: ResponsiveFrame(
-          maxWidth: 980,
+          maxWidth: 920,
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (userId == null)
-                Expanded(
-                  child: _buildEmptyState(
-                    icon: Icons.lock_outline,
-                    text: 'Sign in to view your todos.',
-                  ),
+          child: userId == null
+              ? _buildEmptyState(
+                  icon: Icons.lock_outline,
+                  text: 'Sign in to view your todos.',
                 )
-              else
-                Expanded(
-                  child: StreamBuilder<QuerySnapshot<Todo>>(
-                    stream: _todosRef
-                        .where('userId', isEqualTo: userId)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      if (snapshot.hasError) {
-                        return Center(
-                          child: Text(
-                            'Could not load todos: ${snapshot.error}',
-                          ),
-                        );
-                      }
-
-                      if (snapshot.connectionState == ConnectionState.waiting) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-
-                      final entries = (snapshot.data?.docs ?? [])
-                          .map(
-                            (snapshot) => _TodoEntry(
-                              id: snapshot.id,
-                              todo: snapshot.data(),
-                            ),
-                          )
-                          .toList();
-                      final filteredEntries = _filteredEntries(entries);
-                      final calendarEntries = filteredEntries
-                          .where(
-                            (entry) =>
-                                entry.todo.occursOnDate(_selectedCalendarDate),
-                          )
-                          .toList(growable: false);
-                      final displayedEntries = _view == _HomeView.calendar
-                          ? calendarEntries
-                          : filteredEntries;
-                      final overview = _overviewService.generate(
-                        todos: entries.map((entry) => entry.todo).toList(),
-                        now: DateTime.now(),
+              : StreamBuilder<QuerySnapshot<Todo>>(
+                  stream: _todosRef
+                      .where('userId', isEqualTo: userId)
+                      .snapshots(),
+                  builder: (context, snapshot) {
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text('Could not load todos: ${snapshot.error}'),
                       );
+                    }
 
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          _buildSummaryRow(entries),
-                          const SizedBox(height: 12),
-                          _buildDailyOverview(overview),
-                          const SizedBox(height: 12),
-                          _buildProgressSection(displayedEntries),
-                          const SizedBox(height: 12),
-                          _buildSearchField(),
-                          const SizedBox(height: 12),
-                          _buildToolbar(),
-                          const SizedBox(height: 12),
-                          Expanded(
-                            child: _view == _HomeView.calendar
-                                ? _buildCalendarView(filteredEntries)
-                                : filteredEntries.isEmpty
-                                ? _buildEmptyState(
-                                    icon:
-                                        _statusFilter ==
-                                            _TodoStatusFilter.completed
-                                        ? Icons.task_alt
-                                        : Icons.check_circle_outline,
-                                    text: _emptyStateMessage(entries.isEmpty),
-                                  )
-                                : _buildTodoList(filteredEntries),
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+
+                    final entries = (snapshot.data?.docs ?? [])
+                        .map(
+                          (snapshot) => _TodoEntry(
+                            id: snapshot.id,
+                            todo: snapshot.data(),
                           ),
-                        ],
-                      );
-                    },
-                  ),
-                ),
-              const SizedBox(height: 12),
-              _buildAddTodoBar(userId),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+                        )
+                        .toList(growable: false);
+                    final filteredEntries = _filteredEntries(entries);
+                    final visibleEntries = _view == _HomeView.calendar
+                        ? filteredEntries
+                              .where(
+                                (entry) => entry.todo.occursOnDate(
+                                  _selectedCalendarDate,
+                                ),
+                              )
+                              .toList(growable: false)
+                        : filteredEntries;
+                    final overview = _overviewService.generate(
+                      todos: entries.map((entry) => entry.todo).toList(),
+                      now: DateTime.now(),
+                    );
 
-  Widget _buildSummaryRow(List<_TodoEntry> entries) {
-    final activeCount = entries
-        .where((entry) => !entry.todo.isCompleted)
-        .length;
-    final completedCount = entries
-        .where((entry) => entry.todo.isCompleted)
-        .length;
-    final overdueCount = entries
-        .where((entry) => entry.todo.isOverdue())
-        .length;
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isNarrow = constraints.maxWidth < 620;
-        final children = [
-          _buildSummaryCard(
-            label: 'Open',
-            value: '$activeCount',
-            icon: Icons.pending_actions,
-          ),
-          _buildSummaryCard(
-            label: 'Completed',
-            value: '$completedCount',
-            icon: Icons.task_alt,
-          ),
-          _buildSummaryCard(
-            label: 'Overdue',
-            value: '$overdueCount',
-            icon: Icons.warning_amber_rounded,
-            emphasized: overdueCount > 0,
-          ),
-        ];
-
-        if (isNarrow) {
-          return Column(
-            children: [
-              for (final child in children) ...[
-                child,
-                if (child != children.last) const SizedBox(height: 10),
-              ],
-            ],
-          );
-        }
-
-        return Row(
-          children: [
-            for (var index = 0; index < children.length; index++) ...[
-              Expanded(child: children[index]),
-              if (index != children.length - 1) const SizedBox(width: 10),
-            ],
-          ],
-        );
-      },
-    );
-  }
-
-  Widget _buildSummaryCard({
-    required String label,
-    required String value,
-    required IconData icon,
-    bool emphasized = false,
-  }) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final backgroundColor = emphasized
-        ? colorScheme.errorContainer
-        : colorScheme.surfaceContainerLowest;
-    final foregroundColor = emphasized
-        ? colorScheme.onErrorContainer
-        : colorScheme.onSurface;
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: backgroundColor,
-        border: Border.all(
-          color: emphasized
-              ? colorScheme.error.withValues(alpha: 0.35)
-              : colorScheme.outlineVariant,
-        ),
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Row(
-        children: [
-          Icon(icon, color: foregroundColor),
-          const SizedBox(width: 10),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                value,
-                style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: foregroundColor,
-                ),
-              ),
-              Text(
-                label,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: foregroundColor.withValues(alpha: 0.85),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDailyOverview(DailyOverview overview) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            colorScheme.primaryContainer,
-            colorScheme.secondaryContainer,
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.auto_awesome, color: colorScheme.onPrimaryContainer),
-              const SizedBox(width: 8),
-              Text(
-                'Daily overview',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                  color: colorScheme.onPrimaryContainer,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Text(
-            overview.headline,
-            style: Theme.of(context).textTheme.titleLarge?.copyWith(
-              fontWeight: FontWeight.w800,
-              color: colorScheme.onPrimaryContainer,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            overview.summary,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: colorScheme.onPrimaryContainer.withValues(alpha: 0.9),
-            ),
-          ),
-          if (overview.focusPoints.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            for (final point in overview.focusPoints) ...[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.chevron_right,
-                    color: colorScheme.onPrimaryContainer,
-                    size: 20,
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Text(
-                      point,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onPrimaryContainer.withValues(
-                          alpha: 0.9,
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        _buildSearchField(),
+                        const SizedBox(height: 12),
+                        _buildToolbar(),
+                        const SizedBox(height: 12),
+                        _buildOverviewPanel(
+                          allEntries: entries,
+                          visibleEntries: visibleEntries,
+                          overview: overview,
                         ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              if (point != overview.focusPoints.last) const SizedBox(height: 6),
-            ],
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _buildProgressSection(List<_TodoEntry> entries) {
-    final totalCount = entries.length;
-    final completedCount = entries
-        .where((entry) => entry.todo.isCompleted)
-        .length;
-    final progress = totalCount == 0 ? 0.0 : completedCount / totalCount;
-    final label = _view == _HomeView.calendar
-        ? 'Selected day progress'
-        : '${_statusLabel(_statusFilter)} progress';
-
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerLowest,
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant,
+                        const SizedBox(height: 12),
+                        Expanded(
+                          child: _view == _HomeView.calendar
+                              ? _buildCalendarSection(filteredEntries)
+                              : visibleEntries.isEmpty
+                              ? _buildEmptyState(
+                                  icon:
+                                      _statusFilter ==
+                                          _TodoStatusFilter.completed
+                                      ? Icons.task_alt
+                                      : Icons.check_circle_outline,
+                                  text: _emptyStateMessage(entries.isEmpty),
+                                )
+                              : _buildTodoList(visibleEntries),
+                        ),
+                        const SizedBox(height: 12),
+                        _buildAddTodoBar(userId),
+                      ],
+                    );
+                  },
+                ),
         ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Text(
-                label,
-                style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                totalCount == 0 ? '0%' : '${(progress * 100).round()}%',
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(999),
-            child: LinearProgressIndicator(
-              value: progress,
-              minHeight: 10,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            totalCount == 0
-                ? 'No tasks in the current view.'
-                : '$completedCount of $totalCount tasks completed.',
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-        ],
       ),
     );
   }
@@ -477,77 +212,77 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildToolbar() {
+    final priorityFilter = DropdownButtonFormField<TodoPriority?>(
+      initialValue: _priorityFilter,
+      decoration: const InputDecoration(
+        labelText: 'Priority',
+      ),
+      items: const [
+        DropdownMenuItem<TodoPriority?>(
+          value: null,
+          child: Text('All priorities'),
+        ),
+        DropdownMenuItem<TodoPriority?>(
+          value: TodoPriority.high,
+          child: Text('High'),
+        ),
+        DropdownMenuItem<TodoPriority?>(
+          value: TodoPriority.medium,
+          child: Text('Medium'),
+        ),
+        DropdownMenuItem<TodoPriority?>(
+          value: TodoPriority.low,
+          child: Text('Low'),
+        ),
+      ],
+      onChanged: (value) {
+        setState(() {
+          _priorityFilter = value;
+        });
+      },
+    );
+
+    final statusChips = Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: _TodoStatusFilter.values
+          .map(
+            (status) => ChoiceChip(
+              label: Text(_statusLabel(status)),
+              selected: _statusFilter == status,
+              onSelected: (_) {
+                setState(() {
+                  _statusFilter = status;
+                });
+              },
+            ),
+          )
+          .toList(growable: false),
+    );
+
+    final viewToggle = SegmentedButton<_HomeView>(
+      segments: const [
+        ButtonSegment<_HomeView>(
+          value: _HomeView.list,
+          icon: Icon(Icons.view_list),
+          label: Text('List'),
+        ),
+        ButtonSegment<_HomeView>(
+          value: _HomeView.calendar,
+          icon: Icon(Icons.calendar_month),
+          label: Text('Calendar'),
+        ),
+      ],
+      selected: {_view},
+      onSelectionChanged: (selection) {
+        setState(() {
+          _view = selection.first;
+        });
+      },
+    );
+
     return LayoutBuilder(
       builder: (context, constraints) {
-        final priorityFilter = DropdownButtonFormField<TodoPriority?>(
-          initialValue: _priorityFilter,
-          decoration: const InputDecoration(
-            labelText: 'Priority filter',
-          ),
-          items: const [
-            DropdownMenuItem<TodoPriority?>(
-              value: null,
-              child: Text('All priorities'),
-            ),
-            DropdownMenuItem<TodoPriority?>(
-              value: TodoPriority.high,
-              child: Text('High priority'),
-            ),
-            DropdownMenuItem<TodoPriority?>(
-              value: TodoPriority.medium,
-              child: Text('Medium priority'),
-            ),
-            DropdownMenuItem<TodoPriority?>(
-              value: TodoPriority.low,
-              child: Text('Low priority'),
-            ),
-          ],
-          onChanged: (value) {
-            setState(() {
-              _priorityFilter = value;
-            });
-          },
-        );
-
-        final statusChips = Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: _TodoStatusFilter.values
-              .map(
-                (status) => ChoiceChip(
-                  label: Text(_statusLabel(status)),
-                  selected: _statusFilter == status,
-                  onSelected: (_) {
-                    setState(() {
-                      _statusFilter = status;
-                    });
-                  },
-                ),
-              )
-              .toList(),
-        );
-
-        final viewToggle = SegmentedButton<_HomeView>(
-          segments: const [
-            ButtonSegment<_HomeView>(
-              value: _HomeView.list,
-              icon: Icon(Icons.view_list),
-              label: Text('List'),
-            ),
-            ButtonSegment<_HomeView>(
-              value: _HomeView.calendar,
-              icon: Icon(Icons.calendar_month),
-              label: Text('Calendar'),
-            ),
-          ],
-          selected: {_view},
-          onSelectionChanged: (selection) {
-            setState(() {
-              _view = selection.first;
-            });
-          },
-        );
-
         if (constraints.maxWidth < 760) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -569,7 +304,7 @@ class _HomeScreenState extends State<HomeScreen> {
           children: [
             Expanded(child: statusChips),
             const SizedBox(width: 12),
-            SizedBox(width: 220, child: priorityFilter),
+            SizedBox(width: 180, child: priorityFilter),
             const SizedBox(width: 12),
             viewToggle,
           ],
@@ -578,76 +313,358 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildCalendarView(List<_TodoEntry> filteredEntries) {
-    final calendarEntries = filteredEntries
+  Widget _buildOverviewPanel({
+    required List<_TodoEntry> allEntries,
+    required List<_TodoEntry> visibleEntries,
+    required DailyOverview overview,
+  }) {
+    final openCount = allEntries
+        .where((entry) => !entry.todo.isCompleted)
+        .length;
+    final completedCount = allEntries
+        .where((entry) => entry.todo.isCompleted)
+        .length;
+    final overdueCount = allEntries
+        .where((entry) => entry.todo.isOverdue())
+        .length;
+    final progress = visibleEntries.isEmpty
+        ? 0.0
+        : visibleEntries.where((entry) => entry.todo.isCompleted).length /
+              visibleEntries.length;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surfaceContainerLowest,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildStatPill('Open', '$openCount'),
+              _buildStatPill('Completed', '$completedCount'),
+              _buildStatPill(
+                'Overdue',
+                '$overdueCount',
+                emphasized: overdueCount > 0,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            overview.headline,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            overview.summary,
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          if (overview.focusPoints.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            for (final point in overview.focusPoints.take(2)) ...[
+              Text(
+                '• $point',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+              if (point != overview.focusPoints.take(2).last)
+                const SizedBox(height: 4),
+            ],
+          ],
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Text(
+                _view == _HomeView.calendar
+                    ? 'Selected day progress'
+                    : '${_statusLabel(_statusFilter)} progress',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                visibleEntries.isEmpty ? '0%' : '${(progress * 100).round()}%',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(999),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatPill(
+    String label,
+    String value, {
+    bool emphasized = false,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: emphasized
+            ? colorScheme.errorContainer
+            : colorScheme.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        '$label $value',
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+          color: emphasized ? colorScheme.onErrorContainer : null,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCalendarSection(List<_TodoEntry> filteredEntries) {
+    final selectedEntries = filteredEntries
         .where((entry) => entry.todo.occursOnDate(_selectedCalendarDate))
         .toList(growable: false);
-    final colorScheme = Theme.of(context).colorScheme;
     final localizations = MaterialLocalizations.of(context);
     final dateLabel = localizations.formatFullDate(_selectedCalendarDate);
+    final displayedMonth = DateTime(
+      _displayedMonth.year,
+      _displayedMonth.month,
+    );
+    final firstOfMonth = DateTime(displayedMonth.year, displayedMonth.month, 1);
+    final daysInMonth = DateUtils.getDaysInMonth(
+      displayedMonth.year,
+      displayedMonth.month,
+    );
+    final firstDayOfWeekIndex = localizations.firstDayOfWeekIndex;
+    final firstWeekdayIndex = firstOfMonth.weekday % 7;
+    final leadingEmptyCells = (firstWeekdayIndex - firstDayOfWeekIndex + 7) % 7;
+    final visibleDayCount = leadingEmptyCells + daysInMonth;
+    final trailingEmptyCells = (7 - (visibleDayCount % 7)) % 7;
+    final totalCells = visibleDayCount + trailingEmptyCells;
+    final weekCount = totalCells ~/ 7;
+    final taskDateKeys = filteredEntries
+        .map((entry) => _dateKey(entry.todo.calendarAnchor))
+        .toSet();
+    final weekdayLabels = List<String>.generate(7, (index) {
+      final labelIndex = (firstDayOfWeekIndex + index) % 7;
+      return localizations.narrowWeekdays[labelIndex];
+    }, growable: false);
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: colorScheme.surfaceContainerLowest,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: colorScheme.outlineVariant),
-          ),
-          child: CalendarDatePicker(
-            initialDate: _selectedCalendarDate,
-            firstDate: DateTime(DateTime.now().year - 2, 1, 1),
-            lastDate: DateTime(DateTime.now().year + 5, 12, 31),
-            currentDate: DateTime.now(),
-            onDateChanged: (date) {
-              setState(() {
-                _selectedCalendarDate = DateUtils.dateOnly(date);
-              });
-            },
-          ),
-        ),
-        const SizedBox(height: 12),
-        Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompactHeight = constraints.maxHeight < 640;
+        final cardPadding = isCompactHeight ? 10.0 : 12.0;
+        final gridSpacing = isCompactHeight ? 4.0 : 6.0;
+        final monthHeaderSpacing = isCompactHeight ? 6.0 : 8.0;
+        final dateHeaderSpacing = isCompactHeight ? 10.0 : 12.0;
+        final monthTitleStyle = Theme.of(
+          context,
+        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700);
+        final weekdayStyle = Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        );
+        final availableGridWidth = constraints.maxWidth - (cardPadding * 2);
+        final dayWidth = (availableGridWidth - (gridSpacing * 6)) / 7;
+        final calendarHeightBudget =
+            (selectedEntries.isEmpty
+                    ? constraints.maxHeight * 0.66
+                    : constraints.maxHeight * 0.5)
+                .clamp(220.0, 340.0)
+                .toDouble();
+        final headerHeight = isCompactHeight ? 40.0 : 48.0;
+        final weekdayHeight = isCompactHeight ? 18.0 : 20.0;
+        final chromeHeight =
+            (cardPadding * 2) +
+            headerHeight +
+            weekdayHeight +
+            monthHeaderSpacing +
+            monthHeaderSpacing;
+        final dayHeightFromBudget =
+            ((calendarHeightBudget -
+                        chromeHeight -
+                        (gridSpacing * (weekCount - 1))) /
+                    weekCount)
+                .clamp(28.0, 44.0)
+                .toDouble();
+        final dayExtent = dayWidth < dayHeightFromBudget
+            ? dayWidth
+            : dayHeightFromBudget;
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            Card(
+              child: Padding(
+                padding: EdgeInsets.all(cardPadding),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        IconButton(
+                          tooltip: 'Previous month',
+                          onPressed: () => _changeDisplayedMonth(-1),
+                          icon: const Icon(Icons.chevron_left),
+                          visualDensity: isCompactHeight
+                              ? VisualDensity.compact
+                              : null,
+                        ),
+                        Expanded(
+                          child: Text(
+                            localizations.formatMonthYear(displayedMonth),
+                            textAlign: TextAlign.center,
+                            style: monthTitleStyle,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Next month',
+                          onPressed: () => _changeDisplayedMonth(1),
+                          icon: const Icon(Icons.chevron_right),
+                          visualDensity: isCompactHeight
+                              ? VisualDensity.compact
+                              : null,
+                        ),
+                      ],
+                    ),
+                    SizedBox(height: monthHeaderSpacing),
+                    Row(
+                      children: [
+                        for (final label in weekdayLabels)
+                          Expanded(
+                            child: Center(
+                              child: Text(label, style: weekdayStyle),
+                            ),
+                          ),
+                      ],
+                    ),
+                    SizedBox(height: monthHeaderSpacing),
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: totalCells,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 7,
+                        mainAxisSpacing: gridSpacing,
+                        crossAxisSpacing: gridSpacing,
+                        mainAxisExtent: dayExtent,
+                      ),
+                      itemBuilder: (context, index) {
+                        if (index < leadingEmptyCells ||
+                            index >= leadingEmptyCells + daysInMonth) {
+                          return const SizedBox.shrink();
+                        }
+
+                        final day = index - leadingEmptyCells + 1;
+                        final date = DateTime(
+                          displayedMonth.year,
+                          displayedMonth.month,
+                          day,
+                        );
+                        final normalizedDate = DateUtils.dateOnly(date);
+                        final isSelected = _isSameDate(
+                          normalizedDate,
+                          _selectedCalendarDate,
+                        );
+                        final hasTasks = taskDateKeys.contains(_dateKey(date));
+                        final colorScheme = Theme.of(context).colorScheme;
+                        final backgroundColor = isSelected
+                            ? hasTasks
+                                  ? colorScheme.error
+                                  : colorScheme.primary
+                            : hasTasks
+                            ? colorScheme.errorContainer.withValues(alpha: 0.85)
+                            : colorScheme.surfaceContainerLowest;
+                        final foregroundColor = isSelected
+                            ? (hasTasks
+                                  ? colorScheme.onError
+                                  : colorScheme.onPrimary)
+                            : hasTasks
+                            ? colorScheme.error
+                            : colorScheme.onSurface;
+
+                        return Material(
+                          color: backgroundColor,
+                          borderRadius: BorderRadius.circular(10),
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(10),
+                            onTap: () {
+                              setState(() {
+                                _selectedCalendarDate = normalizedDate;
+                                _displayedMonth = DateTime(
+                                  normalizedDate.year,
+                                  normalizedDate.month,
+                                );
+                              });
+                            },
+                            child: Center(
+                              child: Text(
+                                '$day',
+                                style: Theme.of(context).textTheme.bodyMedium
+                                    ?.copyWith(
+                                      color: foregroundColor,
+                                      fontWeight: hasTasks || isSelected
+                                          ? FontWeight.w700
+                                          : FontWeight.w500,
+                                    ),
+                              ),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(height: dateHeaderSpacing),
             Text(
               dateLabel,
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.w700,
               ),
             ),
-            const Spacer(),
-            Text(
-              '${calendarEntries.length} task${calendarEntries.length == 1 ? '' : 's'}',
-              style: Theme.of(context).textTheme.bodyMedium,
+            const SizedBox(height: 8),
+            Expanded(
+              child: selectedEntries.isEmpty
+                  ? _buildEmptyState(
+                      icon: Icons.event_available,
+                      text: 'No tasks match this day and filter set.',
+                    )
+                  : _buildTodoList(selectedEntries),
             ),
           ],
-        ),
-        const SizedBox(height: 12),
-        Expanded(
-          child: calendarEntries.isEmpty
-              ? _buildEmptyState(
-                  icon: Icons.event_available,
-                  text: 'No tasks match this day and filter set.',
-                )
-              : _buildTodoList(calendarEntries),
-        ),
-      ],
+        );
+      },
     );
   }
 
   Widget _buildTodoList(List<_TodoEntry> entries) {
     return ListView.builder(
-      padding: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(vertical: 2),
       itemCount: entries.length,
       itemBuilder: (context, index) {
         final entry = entries[index];
-
-        return _buildTodoCard(
-          todoId: entry.id,
-          todo: entry.todo,
-        );
+        return _buildTodoCard(todoId: entry.id, todo: entry.todo);
       },
     );
   }
@@ -658,24 +675,101 @@ class _HomeScreenState extends State<HomeScreen> {
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final isOverdue = todo.isOverdue();
-    final priorityColor = _priorityColor(todo.priority);
+    final primaryMeta = <String>[
+      if (todo.category.trim().isNotEmpty) todo.category.trim(),
+      _shortPriorityLabel(todo.priority),
+      if (todo.dueAt != null)
+        isOverdue
+            ? 'Overdue ${_formatShortDate(todo.dueAt!)}'
+            : 'Due ${_formatShortDate(todo.dueAt!)}',
+      if (todo.repeatFrequency != TodoRepeatFrequency.none)
+        _shortRepeatLabel(todo.repeatFrequency),
+    ];
+    final secondaryMeta = <String>[
+      if (todo.location.trim().isNotEmpty) todo.location.trim(),
+      if (todo.subTodos.isNotEmpty)
+        '${todo.completedSubTodoCount}/${todo.subTodos.length} subtasks',
+      if (todo.attachments.isNotEmpty)
+        '${todo.attachments.length} attachment${todo.attachments.length == 1 ? '' : 's'}',
+      if (todo.isCompleted && todo.completedAt != null)
+        'Completed ${_formatShortDate(todo.completedAt!)}',
+    ];
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Card(
         color: isOverdue
-            ? colorScheme.errorContainer.withValues(alpha: 0.65)
-            : todo.isCompleted
-            ? colorScheme.surfaceContainerLow
+            ? colorScheme.errorContainer.withValues(alpha: 0.4)
             : null,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(10),
-          side: BorderSide(
-            color: isOverdue ? colorScheme.error : colorScheme.outlineVariant,
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 14,
+            vertical: 10,
           ),
-        ),
-        child: InkWell(
-          borderRadius: BorderRadius.circular(10),
+          leading: Checkbox(
+            value: todo.isCompleted,
+            onChanged: (value) => _toggleTodoCompletion(todoId, todo, value),
+          ),
+          title: Text(
+            todo.text,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              decoration: todo.isCompleted ? TextDecoration.lineThrough : null,
+            ),
+          ),
+          subtitle: Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (todo.description.trim().isNotEmpty)
+                  Text(
+                    todo.description.trim(),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                if (primaryMeta.isNotEmpty) ...[
+                  if (todo.description.trim().isNotEmpty)
+                    const SizedBox(height: 4),
+                  Text(
+                    primaryMeta.join(' • '),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: isOverdue
+                          ? colorScheme.error
+                          : colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+                if (secondaryMeta.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    secondaryMeta.join(' • '),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ],
+                if (todo.subTodos.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(999),
+                    child: LinearProgressIndicator(
+                      value: todo.subTodoProgress,
+                      minHeight: 6,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          trailing: const Icon(Icons.chevron_right),
           onTap: () {
             Navigator.of(context).push(
               MaterialPageRoute(
@@ -683,206 +777,8 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             );
           },
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Checkbox(
-                  value: todo.isCompleted,
-                  onChanged: (value) =>
-                      _toggleTodoCompletion(todoId, todo, value),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              todo.text,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontWeight: FontWeight.w700,
-                                fontSize: 16,
-                                decoration: todo.isCompleted
-                                    ? TextDecoration.lineThrough
-                                    : null,
-                              ),
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Icon(
-                            Icons.chevron_right,
-                            color: colorScheme.onSurfaceVariant,
-                          ),
-                        ],
-                      ),
-                      if (todo.description.trim().isNotEmpty) ...[
-                        const SizedBox(height: 6),
-                        Text(
-                          todo.description.trim(),
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ],
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          _buildPriorityBadge(todo.priority, priorityColor),
-                          if (todo.category.trim().isNotEmpty)
-                            _buildTagBadge(
-                              Icons.folder_outlined,
-                              todo.category.trim(),
-                            ),
-                          for (final subCategory in todo.subCategories.take(3))
-                            _buildTagBadge(
-                              Icons.subdirectory_arrow_right,
-                              subCategory,
-                            ),
-                          if (todo.repeatFrequency != TodoRepeatFrequency.none)
-                            _buildTagBadge(
-                              Icons.repeat,
-                              _repeatLabel(todo.repeatFrequency),
-                            ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Wrap(
-                        spacing: 10,
-                        runSpacing: 8,
-                        crossAxisAlignment: WrapCrossAlignment.center,
-                        children: [
-                          _buildMetaLabel(
-                            icon: Icons.access_time,
-                            text: 'Created ${_formatDateTime(todo.createdAt)}',
-                          ),
-                          if (todo.dueAt != null)
-                            _buildMetaLabel(
-                              icon: isOverdue
-                                  ? Icons.warning_amber_rounded
-                                  : Icons.event_outlined,
-                              text: isOverdue
-                                  ? 'Overdue since ${_formatDateTime(todo.dueAt!)}'
-                                  : 'Due ${_formatDateTime(todo.dueAt!)}',
-                              color: isOverdue
-                                  ? colorScheme.error
-                                  : priorityColor,
-                            ),
-                          if (todo.location.trim().isNotEmpty)
-                            _buildMetaLabel(
-                              icon: Icons.location_on_outlined,
-                              text: todo.location.trim(),
-                            ),
-                          if (todo.subTodos.isNotEmpty)
-                            _buildMetaLabel(
-                              icon: Icons.playlist_add_check_circle_outlined,
-                              text:
-                                  '${todo.completedSubTodoCount}/${todo.subTodos.length} subtasks',
-                            ),
-                          if (todo.attachments.isNotEmpty)
-                            _buildMetaLabel(
-                              icon: Icons.attach_file,
-                              text:
-                                  '${todo.attachments.length} attachment${todo.attachments.length == 1 ? '' : 's'}',
-                            ),
-                          if (todo.isCompleted && todo.completedAt != null)
-                            _buildMetaLabel(
-                              icon: Icons.task_alt,
-                              text:
-                                  'Completed ${_formatDateTime(todo.completedAt!)}',
-                              color: colorScheme.primary,
-                            ),
-                        ],
-                      ),
-                      if (todo.subTodos.isNotEmpty) ...[
-                        const SizedBox(height: 12),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(999),
-                          child: LinearProgressIndicator(
-                            value: todo.subTodoProgress,
-                            minHeight: 8,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
       ),
-    );
-  }
-
-  Widget _buildPriorityBadge(TodoPriority priority, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        _priorityLabel(priority),
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: color,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTagBadge(IconData icon, String text) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 14, color: colorScheme.onSurfaceVariant),
-          const SizedBox(width: 4),
-          Text(
-            text,
-            style: Theme.of(context).textTheme.labelMedium?.copyWith(
-              color: colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMetaLabel({
-    required IconData icon,
-    required String text,
-    Color? color,
-  }) {
-    final labelColor = color ?? Theme.of(context).colorScheme.onSurfaceVariant;
-
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 16, color: labelColor),
-        const SizedBox(width: 4),
-        Text(
-          text,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: labelColor,
-          ),
-        ),
-      ],
     );
   }
 
@@ -909,7 +805,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   child: Text(_priorityLabel(priority)),
                 ),
               )
-              .toList(),
+              .toList(growable: false),
           onChanged: (value) {
             if (value == null) {
               return;
@@ -922,10 +818,10 @@ class _HomeScreenState extends State<HomeScreen> {
         final button = FilledButton.icon(
           onPressed: () => _addTodo(userId),
           icon: const Icon(Icons.send),
-          label: const Text('Add todo'),
+          label: const Text('Add'),
         );
 
-        if (constraints.maxWidth < 680) {
+        if (constraints.maxWidth < 640) {
           return Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -943,11 +839,10 @@ class _HomeScreenState extends State<HomeScreen> {
         }
 
         return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(child: input),
             const SizedBox(width: 12),
-            SizedBox(width: 180, child: priorityField),
+            SizedBox(width: 170, child: priorityField),
             const SizedBox(width: 12),
             button,
           ],
@@ -966,8 +861,8 @@ class _HomeScreenState extends State<HomeScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 42, color: colorScheme.secondary),
-          const SizedBox(height: 12),
+          Icon(icon, size: 40, color: colorScheme.secondary),
+          const SizedBox(height: 10),
           Text(
             text,
             textAlign: TextAlign.center,
@@ -1080,14 +975,39 @@ class _HomeScreenState extends State<HomeScreen> {
     return 'No todos to show.';
   }
 
-  String _formatDateTime(DateTime dateTime) {
-    final localDateTime = dateTime.toLocal();
-    final localizations = MaterialLocalizations.of(context);
-    final date = localizations.formatMediumDate(localDateTime);
-    final time = localizations.formatTimeOfDay(
-      TimeOfDay.fromDateTime(localDateTime),
+  String _formatShortDate(DateTime dateTime) {
+    return MaterialLocalizations.of(
+      context,
+    ).formatShortDate(dateTime.toLocal());
+  }
+
+  void _changeDisplayedMonth(int monthDelta) {
+    final nextMonth = DateTime(
+      _displayedMonth.year,
+      _displayedMonth.month + monthDelta,
     );
-    return '$date at $time';
+    final maxDay = DateUtils.getDaysInMonth(nextMonth.year, nextMonth.month);
+    final selectedDay = _selectedCalendarDate.day <= maxDay
+        ? _selectedCalendarDate.day
+        : maxDay;
+
+    setState(() {
+      _displayedMonth = DateTime(nextMonth.year, nextMonth.month);
+      _selectedCalendarDate = DateTime(
+        nextMonth.year,
+        nextMonth.month,
+        selectedDay,
+      );
+    });
+  }
+
+  bool _isSameDate(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  int _dateKey(DateTime dateTime) {
+    final date = DateUtils.dateOnly(dateTime.toLocal());
+    return date.year * 10000 + date.month * 100 + date.day;
   }
 
   Future<void> _toggleTodoCompletion(
@@ -1111,9 +1031,7 @@ class _HomeScreenState extends State<HomeScreen> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Could not update todo completion: $error'),
-        ),
+        SnackBar(content: Text('Could not update todo completion: $error')),
       );
     }
   }
@@ -1143,21 +1061,20 @@ class _HomeScreenState extends State<HomeScreen> {
     };
   }
 
-  String _repeatLabel(TodoRepeatFrequency repeatFrequency) {
+  String _shortPriorityLabel(TodoPriority priority) {
+    return switch (priority) {
+      TodoPriority.high => 'High priority',
+      TodoPriority.medium => 'Medium priority',
+      TodoPriority.low => 'Low priority',
+    };
+  }
+
+  String _shortRepeatLabel(TodoRepeatFrequency repeatFrequency) {
     return switch (repeatFrequency) {
       TodoRepeatFrequency.none => 'No repeat',
       TodoRepeatFrequency.daily => 'Repeats daily',
       TodoRepeatFrequency.weekly => 'Repeats weekly',
       TodoRepeatFrequency.monthly => 'Repeats monthly',
-    };
-  }
-
-  Color _priorityColor(TodoPriority priority) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return switch (priority) {
-      TodoPriority.high => colorScheme.error,
-      TodoPriority.medium => colorScheme.secondary,
-      TodoPriority.low => colorScheme.primary,
     };
   }
 

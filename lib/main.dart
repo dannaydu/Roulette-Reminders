@@ -35,8 +35,8 @@ ThemeData _buildAppTheme(Brightness brightness) {
         seedColor: const Color(0xFF2F7D6D),
         brightness: brightness,
       ).copyWith(
-        secondary: const Color(0xFFC75B4D),
-        surface: isDark ? const Color(0xFF101815) : const Color(0xFFF7F9F8),
+        secondary: const Color(0xFF6D7D77),
+        surface: isDark ? const Color(0xFF111715) : const Color(0xFFF5F6F4),
       );
 
   return ThemeData(
@@ -56,7 +56,7 @@ ThemeData _buildAppTheme(Brightness brightness) {
       elevation: 0,
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         side: BorderSide(color: colorScheme.outlineVariant),
       ),
     ),
@@ -64,18 +64,19 @@ ThemeData _buildAppTheme(Brightness brightness) {
       filled: true,
       fillColor: colorScheme.surfaceContainerLowest,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(10),
         borderSide: BorderSide(color: colorScheme.outlineVariant),
       ),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         minimumSize: const Size(96, 48),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
         ),
       ),
     ),
@@ -83,7 +84,7 @@ ThemeData _buildAppTheme(Brightness brightness) {
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(96, 48),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(10),
         ),
       ),
     ),

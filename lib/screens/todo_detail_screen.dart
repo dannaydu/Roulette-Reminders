@@ -466,29 +466,64 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   }
 
   Widget _buildPriorityControls() {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: TodoPriority.values
+          .map(
+            (priority) => ChoiceChip(
+              label: Text(_priorityLabel(priority)),
+              selected: _selectedPriority == priority,
+              onSelected: _isSaving || _isDeleting || _isUploadingAttachment
+                  ? null
+                  : (_) {
+                      setState(() {
+                        _selectedPriority = priority;
+                      });
+                    },
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _buildLabeledControl({
+    required String label,
+    required Widget child,
+  }) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Priority', style: Theme.of(context).textTheme.titleMedium),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            color: Theme.of(context).colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: TodoPriority.values
-              .map(
-                (priority) => ChoiceChip(
-                  label: Text(_priorityLabel(priority)),
-                  selected: _selectedPriority == priority,
-                  onSelected: _isSaving || _isDeleting || _isUploadingAttachment
-                      ? null
-                      : (_) {
-                          setState(() {
-                            _selectedPriority = priority;
-                          });
-                        },
-                ),
-              )
-              .toList(),
+        child,
+      ],
+    );
+  }
+
+  Widget _buildScheduleControls(Todo todo) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _buildLabeledControl(
+          label: 'Priority',
+          child: _buildPriorityControls(),
+        ),
+        const SizedBox(height: 12),
+        _buildLabeledControl(
+          label: 'Repeating task',
+          child: _buildRepeatControls(),
+        ),
+        const SizedBox(height: 12),
+        _buildLabeledControl(
+          label: 'Due date',
+          child: _buildDueAtControls(todo),
         ),
       ],
     );
@@ -498,7 +533,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     return DropdownButtonFormField<TodoRepeatFrequency>(
       initialValue: _repeatFrequency,
       decoration: const InputDecoration(
-        labelText: 'Repeating task',
+        hintText: 'Choose frequency',
       ),
       items: TodoRepeatFrequency.values
           .map(
@@ -524,42 +559,33 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   Widget _buildDueAtControls(Todo todo) {
     final dueAt = todo.dueAt;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
       children: [
-        Text('Due date', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: _isSaving || _isDeleting || _isUploadingAttachment
-                    ? null
-                    : () => _pickDueAt(todo),
-                icon: const Icon(Icons.event),
-                label: Align(
-                  alignment: Alignment.centerLeft,
-                  child: Text(
-                    dueAt == null
-                        ? 'Choose date and time'
-                        : _formatDateTime(dueAt),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
+        Expanded(
+          child: OutlinedButton.icon(
+            onPressed: _isSaving || _isDeleting || _isUploadingAttachment
+                ? null
+                : () => _pickDueAt(todo),
+            icon: const Icon(Icons.event),
+            label: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                dueAt == null ? 'Choose date and time' : _formatDateTime(dueAt),
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (dueAt != null) ...[
-              const SizedBox(width: 8),
-              IconButton(
-                tooltip: 'Remove due date',
-                onPressed: _isSaving || _isDeleting || _isUploadingAttachment
-                    ? null
-                    : () => _setDueAt(null),
-                icon: const Icon(Icons.clear),
-              ),
-            ],
-          ],
+          ),
         ),
+        if (dueAt != null) ...[
+          const SizedBox(width: 8),
+          IconButton(
+            tooltip: 'Remove due date',
+            onPressed: _isSaving || _isDeleting || _isUploadingAttachment
+                ? null
+                : () => _setDueAt(null),
+            icon: const Icon(Icons.clear),
+          ),
+        ],
       ],
     );
   }
@@ -568,8 +594,6 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Sub-categories', style: Theme.of(context).textTheme.titleMedium),
-        const SizedBox(height: 8),
         Row(
           children: [
             Expanded(
@@ -620,12 +644,11 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
       children: [
         Row(
           children: [
-            Text('Sub-todos', style: Theme.of(context).textTheme.titleMedium),
-            const Spacer(),
             Text(
               '${todo.completedSubTodoCount}/${todo.subTodos.length}',
               style: Theme.of(context).textTheme.bodySmall,
             ),
+            const Spacer(),
           ],
         ),
         const SizedBox(height: 8),
@@ -703,19 +726,16 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Text('Attachments', style: Theme.of(context).textTheme.titleMedium),
-            const Spacer(),
-            if (_isUploadingAttachment)
-              const SizedBox(
-                width: 18,
-                height: 18,
-                child: CircularProgressIndicator(strokeWidth: 2),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
+        if (_isUploadingAttachment)
+          const Align(
+            alignment: Alignment.centerRight,
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        if (_isUploadingAttachment) const SizedBox(height: 8),
         Wrap(
           spacing: 8,
           runSpacing: 8,
@@ -979,11 +999,35 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     };
   }
 
+  Widget _buildSection({
+    required String title,
+    required Widget child,
+  }) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 12),
+            child,
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Todo details'),
+        title: const Text('Task'),
         actions: [
           IconButton(
             tooltip: 'Delete todo',
@@ -1034,61 +1078,87 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
 
               return ListView(
                 children: [
-                  TextField(
-                    controller: _titleController,
-                    enabled:
-                        !_isSaving && !_isDeleting && !_isUploadingAttachment,
-                    decoration: const InputDecoration(
-                      labelText: 'Todo title',
+                  _buildSection(
+                    title: 'Details',
+                    child: Column(
+                      children: [
+                        TextField(
+                          controller: _titleController,
+                          enabled:
+                              !_isSaving &&
+                              !_isDeleting &&
+                              !_isUploadingAttachment,
+                          decoration: const InputDecoration(
+                            labelText: 'Title',
+                          ),
+                          maxLines: null,
+                          textInputAction: TextInputAction.done,
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _descriptionController,
+                          enabled:
+                              !_isSaving &&
+                              !_isDeleting &&
+                              !_isUploadingAttachment,
+                          decoration: const InputDecoration(
+                            labelText: 'Description',
+                            alignLabelWithHint: true,
+                          ),
+                          minLines: 3,
+                          maxLines: 5,
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _categoryController,
+                          enabled:
+                              !_isSaving &&
+                              !_isDeleting &&
+                              !_isUploadingAttachment,
+                          decoration: const InputDecoration(
+                            labelText: 'Category',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _locationController,
+                          enabled:
+                              !_isSaving &&
+                              !_isDeleting &&
+                              !_isUploadingAttachment,
+                          decoration: const InputDecoration(
+                            labelText: 'Location',
+                            hintText: 'Room, address, or place name',
+                          ),
+                        ),
+                      ],
                     ),
-                    maxLines: null,
-                    textInputAction: TextInputAction.done,
                   ),
                   const SizedBox(height: 16),
-                  TextField(
-                    controller: _descriptionController,
-                    enabled:
-                        !_isSaving && !_isDeleting && !_isUploadingAttachment,
-                    decoration: const InputDecoration(
-                      labelText: 'Description',
-                      alignLabelWithHint: true,
-                    ),
-                    minLines: 3,
-                    maxLines: 5,
+                  _buildSection(
+                    title: 'Schedule',
+                    child: _buildScheduleControls(todo),
                   ),
                   const SizedBox(height: 16),
-                  TextField(
-                    controller: _categoryController,
-                    enabled:
-                        !_isSaving && !_isDeleting && !_isUploadingAttachment,
-                    decoration: const InputDecoration(
-                      labelText: 'Category',
-                    ),
+                  _buildSection(
+                    title: 'Sub-categories',
+                    child: _buildSubCategoryControls(todo),
                   ),
                   const SizedBox(height: 16),
-                  _buildSubCategoryControls(todo),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _locationController,
-                    enabled:
-                        !_isSaving && !_isDeleting && !_isUploadingAttachment,
-                    decoration: const InputDecoration(
-                      labelText: 'Location',
-                      hintText: 'Room, address, or place name',
-                    ),
+                  _buildSection(
+                    title: 'Sub-todos',
+                    child: _buildSubTodoControls(todo),
                   ),
                   const SizedBox(height: 16),
-                  _buildPriorityControls(),
+                  _buildSection(
+                    title: 'Attachments',
+                    child: _buildAttachmentControls(todo),
+                  ),
                   const SizedBox(height: 16),
-                  _buildRepeatControls(),
-                  const SizedBox(height: 16),
-                  _buildDueAtControls(todo),
-                  const SizedBox(height: 16),
-                  _buildSubTodoControls(todo),
-                  const SizedBox(height: 16),
-                  _buildAttachmentControls(todo),
-                  const SizedBox(height: 16),
-                  _buildTimeline(todo),
+                  _buildSection(
+                    title: 'Activity',
+                    child: _buildTimeline(todo),
+                  ),
                   const SizedBox(height: 24),
                   Align(
                     alignment: Alignment.centerRight,
