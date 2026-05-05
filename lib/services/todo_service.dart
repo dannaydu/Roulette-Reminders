@@ -6,9 +6,17 @@ import 'package:todo/todo.dart';
 class TodoCompletionResult {
   const TodoCompletionResult({
     required this.spinAwarded,
+    this.bossBetResolved = false,
+    this.bossBetWon = false,
+    this.bossBetAmount = 0,
+    this.bossBetPayout = 0,
   });
 
   final bool spinAwarded;
+  final bool bossBetResolved;
+  final bool bossBetWon;
+  final int bossBetAmount;
+  final int bossBetPayout;
 }
 
 class TodoService {
@@ -25,6 +33,86 @@ class TodoService {
 
   CollectionReference<Todo> get todosRef => _todosRef;
 
+  Future<void> settleExpiredBossBet({
+    required String todoId,
+    required Todo todo,
+  }) async {
+    if (!todo.isBossBetExpired() || !todo.bossBet.isActive) {
+      return;
+    }
+
+    await _todosRef.doc(todoId).update({
+      'bossBet': todo.bossBet
+          .copyWith(
+            status: TodoBossBetStatus.lost,
+            resolvedAt: DateTime.now(),
+          )
+          .toMap(),
+    });
+  }
+
+  Future<void> placeBossBet({
+    required String todoId,
+    required Todo todo,
+    required int amount,
+  }) async {
+    if (amount < 1) {
+      throw StateError('Choose a valid chip amount.');
+    }
+    if (todo.userId.isEmpty) {
+      throw StateError('You must be signed in to place a bet.');
+    }
+
+    final now = DateTime.now();
+    final dueAt = todo.dueAt;
+    if (dueAt == null || !dueAt.isAfter(now)) {
+      throw StateError('Add a future due date before placing a Boss Bet.');
+    }
+
+    final todoRef = _todosRef.doc(todoId);
+    final profileRef = CasinoService.instance.profileRef(todo.userId);
+
+    await FirebaseFirestore.instance.runTransaction((transaction) async {
+      final todoSnapshot = await transaction.get(todoRef);
+      final currentTodo = todoSnapshot.data();
+      if (currentTodo == null) {
+        throw StateError('That task no longer exists.');
+      }
+      if (currentTodo.isCompleted) {
+        throw StateError('Completed tasks cannot take new bets.');
+      }
+      if (currentTodo.hasActiveBossBet(now) || currentTodo.hasBossBet) {
+        throw StateError('This task already has a settled or active Boss Bet.');
+      }
+      if (currentTodo.dueAt == null || !currentTodo.dueAt!.isAfter(now)) {
+        throw StateError('Add a future due date before placing a Boss Bet.');
+      }
+
+      final profileSnapshot = await transaction.get(profileRef);
+      final profile = CasinoProfile.fromData(profileSnapshot.data());
+      if (profile.balance < amount) {
+        throw StateError('Not enough House Chips for that bet.');
+      }
+
+      transaction.set(
+        profileRef,
+        {
+          'balance': FieldValue.increment(-amount),
+          'updatedAt': Timestamp.fromDate(now),
+        },
+        SetOptions(merge: true),
+      );
+      transaction.update(todoRef, {
+        'bossBet': TodoBossBet(
+          amount: amount,
+          status: TodoBossBetStatus.active,
+          placedAt: now,
+          resolvedAt: null,
+        ).toMap(),
+      });
+    });
+  }
+
   Future<TodoCompletionResult> toggleCompletion({
     required String todoId,
     required Todo todo,
@@ -34,6 +122,11 @@ class TodoService {
     final isNewCompletion = isCompleted && !todo.isCompleted;
     final todoRef = _todosRef.doc(todoId);
     final batch = FirebaseFirestore.instance.batch();
+    final profileUpdates = <String, dynamic>{};
+    var bossBetResolved = false;
+    var bossBetWon = false;
+    var bossBetAmount = 0;
+    var bossBetPayout = 0;
 
     batch.update(todoRef, {
       'completedAt': isCompleted ? Timestamp.fromDate(now) : null,
@@ -56,6 +149,7 @@ class TodoService {
         completedAt: null,
         dueAt: nextDueAt,
         spawnedNextOccurrenceAt: null,
+        bossBet: TodoBossBet.none,
         subTodos: todo.subTodos
             .map(
               (subTodo) => subTodo.copyWith(isCompleted: false),
@@ -73,13 +167,43 @@ class TodoService {
     }
 
     if (isNewCompletion && todo.userId.isNotEmpty) {
+      profileUpdates['pendingSpins'] = FieldValue.increment(1);
+      profileUpdates['spinsEarned'] = FieldValue.increment(1);
+    }
+
+    if (isNewCompletion && todo.bossBet.isActive) {
+      bossBetResolved = true;
+      bossBetAmount = todo.bossBet.amount;
+      final completedBeforeDue =
+          todo.dueAt == null || !now.isAfter(todo.dueAt!);
+      bossBetWon = completedBeforeDue;
+      bossBetPayout = completedBeforeDue ? todo.bossBetPayout : 0;
+
+      batch.update(todoRef, {
+        'bossBet': todo.bossBet
+            .copyWith(
+              status: completedBeforeDue
+                  ? TodoBossBetStatus.won
+                  : TodoBossBetStatus.lost,
+              resolvedAt: now,
+            )
+            .toMap(),
+      });
+
+      if (completedBeforeDue && todo.userId.isNotEmpty) {
+        profileUpdates['balance'] = FieldValue.increment(bossBetPayout);
+        profileUpdates['lifetimeWinnings'] = FieldValue.increment(
+          bossBetPayout,
+        );
+        profileUpdates['lastPayout'] = bossBetPayout;
+      }
+    }
+
+    if (profileUpdates.isNotEmpty && todo.userId.isNotEmpty) {
+      profileUpdates['updatedAt'] = Timestamp.fromDate(now);
       batch.set(
         CasinoService.instance.profileRef(todo.userId),
-        {
-          'pendingSpins': FieldValue.increment(1),
-          'spinsEarned': FieldValue.increment(1),
-          'updatedAt': Timestamp.fromDate(now),
-        },
+        profileUpdates,
         SetOptions(merge: true),
       );
     }
@@ -109,6 +233,10 @@ class TodoService {
 
     return TodoCompletionResult(
       spinAwarded: isNewCompletion,
+      bossBetResolved: bossBetResolved,
+      bossBetWon: bossBetWon,
+      bossBetAmount: bossBetAmount,
+      bossBetPayout: bossBetPayout,
     );
   }
 

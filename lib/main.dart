@@ -20,55 +20,112 @@ class MainApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'Flow State',
-      theme: _buildAppTheme(Brightness.light),
-      darkTheme: _buildAppTheme(Brightness.dark),
+      title: 'Roulette Reminders',
+      theme: _buildAppTheme(),
+      darkTheme: _buildAppTheme(),
+      themeMode: ThemeMode.dark,
       home: const AuthWrapper(),
     );
   }
 }
 
-ThemeData _buildAppTheme(Brightness brightness) {
-  final isDark = brightness == Brightness.dark;
-  const feltGreen = Color(0xFF0F6B3B);
-  const gold = Color(0xFFD6A63A);
-  const rouletteRed = Color(0xFFC53A32);
+ThemeData _buildAppTheme() {
+  const midnightBlack = Color(0xFF08080A);
+  const velvetBlack = Color(0xFF111115);
+  const slateBlack = Color(0xFF18181D);
+  const iron = Color(0xFF23232A);
+  const rouletteRed = Color(0xFFC52D2F);
+  const crimson = Color(0xFF8E1B22);
+  const wine = Color(0xFF4A1115);
+  const ivory = Color(0xFFF5EDE3);
+  const ash = Color(0xFFB8ADA1);
+  final baseTheme = ThemeData(
+    brightness: Brightness.dark,
+    useMaterial3: true,
+  );
   final colorScheme =
       ColorScheme.fromSeed(
-        seedColor: feltGreen,
-        brightness: brightness,
+        seedColor: rouletteRed,
+        brightness: Brightness.dark,
       ).copyWith(
-        primary: feltGreen,
-        secondary: gold,
+        primary: crimson,
+        secondary: rouletteRed,
+        tertiary: ash,
         error: rouletteRed,
-        surface: isDark ? const Color(0xFF08140D) : const Color(0xFFF8F2E3),
-        primaryContainer: isDark
-            ? const Color(0xFF103F27)
-            : const Color(0xFFD5E8D7),
-        secondaryContainer: isDark
-            ? const Color(0xFF564312)
-            : const Color(0xFFF0E0B1),
+        surface: midnightBlack,
+        onSurface: ivory,
+        onPrimary: ivory,
+        onSecondary: ivory,
+        onSurfaceVariant: ash,
+        primaryContainer: wine,
+        onPrimaryContainer: ivory,
+        secondaryContainer: const Color(0xFF331216),
+        onSecondaryContainer: ivory,
+        surfaceContainerLowest: velvetBlack,
+        surfaceContainerLow: slateBlack,
+        surfaceContainerHigh: iron,
+        outlineVariant: const Color(0xFF4B2C31),
       );
-  final cardColor = isDark ? const Color(0xFF0F1E15) : const Color(0xFFFFFBF4);
-  final inputFill = isDark ? const Color(0xFF122319) : const Color(0xFFFFFCF6);
+  final cardColor = velvetBlack;
+  final inputFill = slateBlack;
+  final textTheme = baseTheme.textTheme.copyWith(
+    headlineLarge: baseTheme.textTheme.headlineLarge?.copyWith(
+      fontWeight: FontWeight.w900,
+      letterSpacing: 0.4,
+    ),
+    headlineMedium: baseTheme.textTheme.headlineMedium?.copyWith(
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0.3,
+    ),
+    headlineSmall: baseTheme.textTheme.headlineSmall?.copyWith(
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0.2,
+    ),
+    titleLarge: baseTheme.textTheme.titleLarge?.copyWith(
+      fontWeight: FontWeight.w800,
+      letterSpacing: 0.2,
+    ),
+    titleMedium: baseTheme.textTheme.titleMedium?.copyWith(
+      fontWeight: FontWeight.w700,
+    ),
+    titleSmall: baseTheme.textTheme.titleSmall?.copyWith(
+      fontWeight: FontWeight.w700,
+      letterSpacing: 0.2,
+    ),
+    bodySmall: baseTheme.textTheme.bodySmall?.copyWith(
+      letterSpacing: 0.15,
+    ),
+  );
 
   return ThemeData(
     colorScheme: colorScheme,
     scaffoldBackgroundColor: colorScheme.surface,
+    canvasColor: cardColor,
+    textTheme: textTheme,
     useMaterial3: true,
     appBarTheme: AppBarTheme(
-      backgroundColor: colorScheme.surface,
-      foregroundColor: colorScheme.onSurface,
+      backgroundColor: midnightBlack,
+      foregroundColor: ivory,
       elevation: 0,
+      toolbarHeight: 72,
       scrolledUnderElevation: 1,
-      surfaceTintColor: colorScheme.surfaceTint,
+      surfaceTintColor: Colors.transparent,
+      centerTitle: false,
+      titleTextStyle: textTheme.titleLarge?.copyWith(
+        color: ivory,
+        fontWeight: FontWeight.w900,
+        letterSpacing: 0.4,
+      ),
+      iconTheme: IconThemeData(
+        color: rouletteRed,
+      ),
     ),
     snackBarTheme: SnackBarThemeData(
-      backgroundColor: isDark
-          ? const Color(0xFF15261B)
-          : const Color(0xFF173223),
+      backgroundColor: const Color(0xFF1A0E10),
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       contentTextStyle: TextStyle(
-        color: isDark ? Colors.white : const Color(0xFFF8F2E3),
+        color: ivory,
         fontWeight: FontWeight.w600,
       ),
     ),
@@ -76,11 +133,31 @@ ThemeData _buildAppTheme(Brightness brightness) {
       clipBehavior: Clip.antiAlias,
       color: cardColor,
       elevation: 0,
+      shadowColor: Colors.black.withValues(alpha: 0.2),
       margin: EdgeInsets.zero,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(18),
         side: BorderSide(
-          color: colorScheme.secondary.withValues(alpha: 0.24),
+          color: colorScheme.secondary.withValues(alpha: 0.26),
+        ),
+      ),
+    ),
+    iconButtonTheme: IconButtonThemeData(
+      style: IconButton.styleFrom(
+        foregroundColor: rouletteRed,
+        backgroundColor: colorScheme.surfaceContainerLow.withValues(alpha: 0.7),
+        minimumSize: const Size(42, 42),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(14),
+        ),
+      ),
+    ),
+    dialogTheme: DialogThemeData(
+      backgroundColor: cardColor,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(24),
+        side: BorderSide(
+          color: colorScheme.secondary.withValues(alpha: 0.28),
         ),
       ),
     ),
@@ -88,30 +165,42 @@ ThemeData _buildAppTheme(Brightness brightness) {
       filled: true,
       fillColor: inputFill,
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide(
-          color: colorScheme.secondary.withValues(alpha: 0.22),
+          color: colorScheme.secondary.withValues(alpha: 0.26),
         ),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         borderSide: BorderSide(
-          color: colorScheme.secondary.withValues(alpha: 0.75),
-          width: 1.5,
+          color: colorScheme.secondary.withValues(alpha: 0.88),
+          width: 1.8,
         ),
       ),
+      labelStyle: TextStyle(
+        color: colorScheme.onSurfaceVariant,
+        fontWeight: FontWeight.w600,
+      ),
+      hintStyle: TextStyle(
+        color: colorScheme.onSurfaceVariant.withValues(alpha: 0.82),
+      ),
+      prefixIconColor: colorScheme.secondary,
       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
         minimumSize: const Size(96, 48),
-        backgroundColor: colorScheme.primary,
-        foregroundColor: colorScheme.onPrimary,
+        backgroundColor: colorScheme.secondary,
+        foregroundColor: colorScheme.onSecondary,
+        elevation: 0,
+        textStyle: textTheme.titleSmall?.copyWith(
+          fontWeight: FontWeight.w800,
+        ),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
         ),
       ),
     ),
@@ -119,33 +208,57 @@ ThemeData _buildAppTheme(Brightness brightness) {
       style: OutlinedButton.styleFrom(
         minimumSize: const Size(96, 48),
         side: BorderSide(
-          color: colorScheme.secondary.withValues(alpha: 0.6),
+          color: colorScheme.secondary.withValues(alpha: 0.7),
         ),
+        foregroundColor: colorScheme.onSurface,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(14),
         ),
+      ),
+    ),
+    popupMenuTheme: PopupMenuThemeData(
+      color: cardColor,
+      surfaceTintColor: Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(
+          color: colorScheme.secondary.withValues(alpha: 0.24),
+        ),
+      ),
+    ),
+    chipTheme: baseTheme.chipTheme.copyWith(
+      side: BorderSide(
+        color: colorScheme.secondary.withValues(alpha: 0.3),
+      ),
+      selectedColor: colorScheme.secondaryContainer,
+      backgroundColor: colorScheme.surfaceContainerLow,
+      labelStyle: textTheme.bodySmall?.copyWith(
+        fontWeight: FontWeight.w700,
+      ),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(999),
       ),
     ),
     segmentedButtonTheme: SegmentedButtonThemeData(
       style: ButtonStyle(
         backgroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return colorScheme.primaryContainer;
+            return colorScheme.secondaryContainer;
           }
           return cardColor;
         }),
         foregroundColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return colorScheme.onPrimaryContainer;
+            return colorScheme.onSecondaryContainer;
           }
           return colorScheme.onSurface;
         }),
         side: WidgetStateProperty.all(
-          BorderSide(color: colorScheme.secondary.withValues(alpha: 0.28)),
+          BorderSide(color: colorScheme.secondary.withValues(alpha: 0.32)),
         ),
         shape: WidgetStateProperty.all(
           RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(14),
           ),
         ),
       ),
@@ -164,6 +277,21 @@ ThemeData _buildAppTheme(Brightness brightness) {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(5),
       ),
+    ),
+    progressIndicatorTheme: ProgressIndicatorThemeData(
+      color: colorScheme.secondary,
+      linearTrackColor: colorScheme.surfaceContainerHigh,
+      circularTrackColor: colorScheme.surfaceContainerHigh,
+    ),
+    dividerTheme: DividerThemeData(
+      color: colorScheme.outlineVariant.withValues(alpha: 0.45),
+      thickness: 1,
+      space: 1,
+    ),
+    listTileTheme: ListTileThemeData(
+      iconColor: colorScheme.secondary,
+      textColor: colorScheme.onSurface,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
     ),
   );
 }

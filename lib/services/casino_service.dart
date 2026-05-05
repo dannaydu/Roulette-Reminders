@@ -96,6 +96,30 @@ class RouletteSpinResult {
   final CasinoProfile profile;
 }
 
+enum CasinoTableBetColor {
+  red,
+  black,
+  green,
+}
+
+class ChipBetResult {
+  const ChipBetResult({
+    required this.amount,
+    required this.choice,
+    required this.didWin,
+    required this.payout,
+    required this.roll,
+    required this.profile,
+  });
+
+  final int amount;
+  final CasinoTableBetColor choice;
+  final bool didWin;
+  final int payout;
+  final int roll;
+  final CasinoProfile profile;
+}
+
 class CasinoService {
   CasinoService._();
 
@@ -104,6 +128,11 @@ class CasinoService {
   final CollectionReference<Map<String, dynamic>> _profilesRef =
       FirebaseFirestore.instance.collection('casinoProfiles');
   final Random _random = Random();
+
+  static const List<int> bossBetOptions = [10, 25, 50, 100];
+  static const List<int> tableBetOptions = [10, 25, 50, 100, 250];
+  static const Set<int> _redRolls = {1, 3, 5, 7, 9, 12, 14};
+  static const Set<int> _blackRolls = {2, 4, 6, 8, 10, 11, 13};
 
   static const List<RouletteReward> _wheel = [
     RouletteReward(id: 'stack10', label: '10', payout: 10, weight: 18),
@@ -125,6 +154,62 @@ class CasinoService {
   Stream<CasinoProfile> profileStream(String userId) {
     return profileRef(userId).snapshots().map(
       (snapshot) => CasinoProfile.fromData(snapshot.data()),
+    );
+  }
+
+  Future<ChipBetResult> placeTableBet({
+    required String userId,
+    required int amount,
+    required CasinoTableBetColor choice,
+  }) async {
+    if (userId.isEmpty) {
+      throw StateError('You must be signed in to place a bet.');
+    }
+    if (amount < 1) {
+      throw StateError('Choose a valid chip amount.');
+    }
+
+    final profileDoc = profileRef(userId);
+    final now = DateTime.now();
+    final roll = _random.nextInt(15);
+    final didWin = switch (choice) {
+      CasinoTableBetColor.red => _redRolls.contains(roll),
+      CasinoTableBetColor.black => _blackRolls.contains(roll),
+      CasinoTableBetColor.green => roll == 0,
+    };
+    final payoutMultiplier = choice == CasinoTableBetColor.green ? 14 : 2;
+    final payout = didWin ? amount * payoutMultiplier : 0;
+    CasinoProfile? updatedProfile;
+
+    await FirebaseFirestore.instance.runTransaction((transaction) async {
+      final snapshot = await transaction.get(profileDoc);
+      final currentProfile = CasinoProfile.fromData(snapshot.data());
+
+      if (currentProfile.balance < amount) {
+        throw StateError('Not enough House Chips for that bet.');
+      }
+
+      updatedProfile = currentProfile.copyWith(
+        balance: currentProfile.balance - amount + payout,
+        lifetimeWinnings: currentProfile.lifetimeWinnings + payout,
+        lastPayout: didWin ? payout : 0,
+        updatedAt: now,
+      );
+
+      transaction.set(
+        profileDoc,
+        updatedProfile!.toMap(),
+        SetOptions(merge: true),
+      );
+    });
+
+    return ChipBetResult(
+      amount: amount,
+      choice: choice,
+      didWin: didWin,
+      payout: payout,
+      roll: roll,
+      profile: updatedProfile ?? CasinoProfile.empty,
     );
   }
 

@@ -32,6 +32,23 @@ enum TodoRepeatFrequency {
   }
 }
 
+enum TodoBossBetStatus {
+  none,
+  active,
+  won,
+  lost
+  ;
+
+  static TodoBossBetStatus fromFirestoreValue(Object? value) {
+    return switch (value) {
+      'active' => TodoBossBetStatus.active,
+      'won' => TodoBossBetStatus.won,
+      'lost' => TodoBossBetStatus.lost,
+      _ => TodoBossBetStatus.none,
+    };
+  }
+}
+
 class TodoSubTask {
   const TodoSubTask({
     required this.id,
@@ -127,6 +144,65 @@ class TodoAttachment {
   }
 }
 
+class TodoBossBet {
+  const TodoBossBet({
+    this.amount = 0,
+    this.status = TodoBossBetStatus.none,
+    this.placedAt,
+    this.resolvedAt,
+  });
+
+  static const none = TodoBossBet();
+
+  final int amount;
+  final TodoBossBetStatus status;
+  final DateTime? placedAt;
+  final DateTime? resolvedAt;
+
+  factory TodoBossBet.fromMap(Map<String, dynamic>? map) {
+    if (map == null || map.isEmpty) {
+      return TodoBossBet.none;
+    }
+
+    final placedAt = map['placedAt'];
+    final resolvedAt = map['resolvedAt'];
+
+    return TodoBossBet(
+      amount: (map['amount'] as num?)?.toInt() ?? 0,
+      status: TodoBossBetStatus.fromFirestoreValue(map['status']),
+      placedAt: placedAt is Timestamp ? placedAt.toDate() : null,
+      resolvedAt: resolvedAt is Timestamp ? resolvedAt.toDate() : null,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'amount': amount,
+      'status': status.name,
+      'placedAt': placedAt == null ? null : Timestamp.fromDate(placedAt!),
+      'resolvedAt': resolvedAt == null ? null : Timestamp.fromDate(resolvedAt!),
+    };
+  }
+
+  TodoBossBet copyWith({
+    int? amount,
+    TodoBossBetStatus? status,
+    Object? placedAt = _sentinel,
+    Object? resolvedAt = _sentinel,
+  }) {
+    return TodoBossBet(
+      amount: amount ?? this.amount,
+      status: status ?? this.status,
+      placedAt: placedAt == _sentinel ? this.placedAt : placedAt as DateTime?,
+      resolvedAt: resolvedAt == _sentinel
+          ? this.resolvedAt
+          : resolvedAt as DateTime?,
+    );
+  }
+
+  bool get isActive => status == TodoBossBetStatus.active && amount > 0;
+}
+
 class Todo {
   const Todo({
     required this.text,
@@ -142,6 +218,7 @@ class Todo {
     this.dueAt,
     this.priority = TodoPriority.medium,
     this.repeatFrequency = TodoRepeatFrequency.none,
+    this.bossBet = TodoBossBet.none,
     this.spawnedNextOccurrenceAt,
   });
 
@@ -158,6 +235,7 @@ class Todo {
   final DateTime? dueAt;
   final TodoPriority priority;
   final TodoRepeatFrequency repeatFrequency;
+  final TodoBossBet bossBet;
   final DateTime? spawnedNextOccurrenceAt;
 
   factory Todo.fromSnapshot(DocumentSnapshot<Map<String, dynamic>> snapshot) {
@@ -191,6 +269,7 @@ class Todo {
       repeatFrequency: TodoRepeatFrequency.fromFirestoreValue(
         data['repeatFrequency'],
       ),
+      bossBet: TodoBossBet.fromMap(_map(data['bossBet'])),
       spawnedNextOccurrenceAt: spawnedNextOccurrenceAt is Timestamp
           ? spawnedNextOccurrenceAt.toDate()
           : null,
@@ -216,6 +295,7 @@ class Todo {
       'dueAt': dueAt == null ? null : Timestamp.fromDate(dueAt!),
       'priority': priority.name,
       'repeatFrequency': repeatFrequency.name,
+      'bossBet': bossBet.toMap(),
       'spawnedNextOccurrenceAt': spawnedNextOccurrenceAt == null
           ? null
           : Timestamp.fromDate(spawnedNextOccurrenceAt!),
@@ -236,6 +316,7 @@ class Todo {
     Object? dueAt = _sentinel,
     TodoPriority? priority,
     TodoRepeatFrequency? repeatFrequency,
+    TodoBossBet? bossBet,
     Object? spawnedNextOccurrenceAt = _sentinel,
   }) {
     return Todo(
@@ -254,6 +335,7 @@ class Todo {
       dueAt: dueAt == _sentinel ? this.dueAt : dueAt as DateTime?,
       priority: priority ?? this.priority,
       repeatFrequency: repeatFrequency ?? this.repeatFrequency,
+      bossBet: bossBet ?? this.bossBet,
       spawnedNextOccurrenceAt: spawnedNextOccurrenceAt == _sentinel
           ? this.spawnedNextOccurrenceAt
           : spawnedNextOccurrenceAt as DateTime?,
@@ -261,6 +343,30 @@ class Todo {
   }
 
   bool get isCompleted => completedAt != null;
+
+  bool get hasBossBet =>
+      bossBet.amount > 0 && bossBet.status != TodoBossBetStatus.none;
+
+  bool hasActiveBossBet([DateTime? now]) {
+    return bossBet.isActive && !isBossBetExpired(now);
+  }
+
+  bool isBossBetExpired([DateTime? now]) {
+    if (!bossBet.isActive || dueAt == null) {
+      return false;
+    }
+
+    return (now ?? DateTime.now()).isAfter(dueAt!);
+  }
+
+  TodoBossBetStatus bossBetDisplayStatus([DateTime? now]) {
+    if (isBossBetExpired(now)) {
+      return TodoBossBetStatus.lost;
+    }
+    return bossBet.status;
+  }
+
+  int get bossBetPayout => bossBet.amount * 2;
 
   bool isOverdue([DateTime? now]) {
     if (isCompleted || dueAt == null) {
@@ -332,6 +438,16 @@ class Todo {
           ),
         )
         .toList(growable: false);
+  }
+
+  static Map<String, dynamic>? _map(Object? value) {
+    if (value is! Map) {
+      return null;
+    }
+
+    return value.map(
+      (key, value) => MapEntry('$key', value),
+    );
   }
 }
 

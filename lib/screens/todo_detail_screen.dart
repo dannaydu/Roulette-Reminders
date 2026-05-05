@@ -3,7 +3,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
+import 'package:todo/services/casino_service.dart';
 import 'package:todo/services/notification_service.dart';
+import 'package:todo/services/todo_service.dart';
 import 'package:todo/todo.dart';
 import 'package:todo/widgets/responsive_frame.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -33,6 +35,7 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
   bool _isDeleting = false;
   bool _isSaving = false;
   bool _isUploadingAttachment = false;
+  bool _isSettlingExpiredBossBet = false;
   TodoPriority _selectedPriority = TodoPriority.medium;
   TodoRepeatFrequency _repeatFrequency = TodoRepeatFrequency.none;
 
@@ -105,6 +108,10 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
 
   Future<void> _pickDueAt(Todo todo) async {
     if (_isSaving || _isDeleting || _isUploadingAttachment) {
+      return;
+    }
+    if (todo.bossBet.isActive) {
+      _showSnackBar('You cannot change the due date while a Boss Bet is live.');
       return;
     }
 
@@ -452,6 +459,46 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     }
   }
 
+  Future<void> _placeBossBet(Todo todo, int amount) async {
+    if (_isSaving || _isDeleting || _isUploadingAttachment) {
+      return;
+    }
+
+    try {
+      await TodoService.instance.placeBossBet(
+        todoId: widget.todoId,
+        todo: todo,
+        amount: amount,
+      );
+      _showSnackBar('Boss Bet locked: $amount House Chips at risk.');
+    } catch (error) {
+      _showSnackBar('Could not place Boss Bet: $error');
+    }
+  }
+
+  Future<void> _settleExpiredBossBet(Todo todo) async {
+    if (_isSettlingExpiredBossBet) {
+      return;
+    }
+
+    setState(() {
+      _isSettlingExpiredBossBet = true;
+    });
+
+    try {
+      await TodoService.instance.settleExpiredBossBet(
+        todoId: widget.todoId,
+        todo: todo,
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isSettlingExpiredBossBet = false;
+        });
+      }
+    }
+  }
+
   Future<void> _openAttachment(TodoAttachment attachment) async {
     final uri = Uri.tryParse(attachment.url);
     if (uri == null) {
@@ -529,6 +576,127 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
     );
   }
 
+  Widget _buildBossBetControls(Todo todo) {
+    final now = DateTime.now();
+    final displayStatus = todo.bossBetDisplayStatus(now);
+    final canPlaceBet =
+        !todo.isCompleted &&
+        todo.bossBet.status == TodoBossBetStatus.none &&
+        todo.dueAt != null &&
+        todo.dueAt!.isAfter(now);
+
+    return StreamBuilder<CasinoProfile>(
+      stream: CasinoService.instance.profileStream(todo.userId),
+      builder: (context, snapshot) {
+        final profile = snapshot.data ?? CasinoProfile.empty;
+        final colorScheme = Theme.of(context).colorScheme;
+        final statusText = switch (displayStatus) {
+          TodoBossBetStatus.none =>
+            todo.dueAt == null
+                ? 'Add a future due date to unlock Boss Bet.'
+                : todo.dueAt!.isAfter(now)
+                ? 'Stake chips on this task. Finish before the due time to cash out double.'
+                : 'Set a new future due date before placing a Boss Bet.',
+          TodoBossBetStatus.active =>
+            'Live stake: ${todo.bossBet.amount} chips. Complete before ${_formatDateTime(todo.dueAt!)} to cash out ${todo.bossBetPayout}.',
+          TodoBossBetStatus.won =>
+            'Bet won. ${todo.bossBetPayout} chips were paid out on this task.',
+          TodoBossBetStatus.lost =>
+            'Bet lost. ${todo.bossBet.amount} chips were burned when the deadline passed.',
+        };
+        final statusColor = switch (displayStatus) {
+          TodoBossBetStatus.none => colorScheme.onSurfaceVariant,
+          TodoBossBetStatus.active => colorScheme.secondary,
+          TodoBossBetStatus.won => colorScheme.tertiary,
+          TodoBossBetStatus.lost => colorScheme.error,
+        };
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerLowest,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: colorScheme.outlineVariant,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.local_fire_department, color: statusColor),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Vault ${profile.balance} chips',
+                        style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    statusText,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: statusColor,
+                      fontWeight: displayStatus == TodoBossBetStatus.none
+                          ? FontWeight.w500
+                          : FontWeight.w700,
+                    ),
+                  ),
+                  if (todo.bossBet.placedAt != null) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Placed ${_formatDateTime(todo.bossBet.placedAt!)}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+            if (canPlaceBet) ...[
+              const SizedBox(height: 12),
+              Text(
+                'Bet sizes',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: CasinoService.bossBetOptions
+                    .map(
+                      (amount) => FilledButton.tonalIcon(
+                        onPressed:
+                            profile.balance >= amount &&
+                                !_isSaving &&
+                                !_isDeleting &&
+                                !_isUploadingAttachment
+                            ? () => _placeBossBet(todo, amount)
+                            : null,
+                        icon: const Icon(Icons.casino_outlined),
+                        label: Text('$amount'),
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+            ],
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildRepeatControls() {
     return DropdownButtonFormField<TodoRepeatFrequency>(
       initialValue: _repeatFrequency,
@@ -580,7 +748,11 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
           const SizedBox(width: 8),
           IconButton(
             tooltip: 'Remove due date',
-            onPressed: _isSaving || _isDeleting || _isUploadingAttachment
+            onPressed:
+                _isSaving ||
+                    _isDeleting ||
+                    _isUploadingAttachment ||
+                    todo.bossBet.isActive
                 ? null
                 : () => _setDueAt(null),
             icon: const Icon(Icons.clear),
@@ -1076,6 +1248,14 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                 _hasLoadedFormState = true;
               }
 
+              if (todo.isBossBetExpired() && !_isSettlingExpiredBossBet) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted) {
+                    _settleExpiredBossBet(todo);
+                  }
+                });
+              }
+
               return ListView(
                 children: [
                   _buildSection(
@@ -1138,6 +1318,11 @@ class _TodoDetailScreenState extends State<TodoDetailScreen> {
                   _buildSection(
                     title: 'Schedule',
                     child: _buildScheduleControls(todo),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildSection(
+                    title: 'Boss Bet',
+                    child: _buildBossBetControls(todo),
                   ),
                   const SizedBox(height: 16),
                   _buildSection(
