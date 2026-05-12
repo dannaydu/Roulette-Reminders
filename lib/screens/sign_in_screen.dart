@@ -101,32 +101,23 @@ class _SignInScreenState extends State<SignInScreen> {
                             child: Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 14,
-                                vertical: 8,
+                                vertical: 10,
                               ),
                               decoration: BoxDecoration(
-                                color: colorScheme.secondaryContainer,
+                                color: colorScheme.surfaceContainerHigh,
                                 borderRadius: BorderRadius.circular(999),
                                 border: Border.all(
-                                  color: colorScheme.secondary.withValues(
-                                    alpha: 0.38,
-                                  ),
+                                  color: colorScheme.outlineVariant,
                                 ),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Icon(
-                                    Icons.casino,
-                                    size: 16,
-                                    color: colorScheme.secondary,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(
-                                    'Roulette Reminders',
-                                    style: textTheme.bodySmall?.copyWith(
-                                      fontWeight: FontWeight.w800,
-                                      color: colorScheme.onSecondaryContainer,
-                                    ),
+                                  Image.asset(
+                                    'roulettereminderslogo.png',
+                                    width: 120,
+                                    height: 120,
+                                    filterQuality: FilterQuality.high,
                                   ),
                                 ],
                               ),

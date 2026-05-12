@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:confetti/confetti.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:todo/screens/todo_detail_screen.dart';
@@ -43,6 +44,9 @@ class _HomeScreenState extends State<HomeScreen> {
   final _searchController = TextEditingController();
   final _todosRef = TodoService.instance.todosRef;
   final _overviewService = const DailyOverviewService();
+  late final ConfettiController _taskConfettiController = ConfettiController(
+    duration: const Duration(milliseconds: 900),
+  );
 
   String _searchQuery = '';
   TodoPriority _newTodoPriority = TodoPriority.medium;
@@ -60,6 +64,7 @@ class _HomeScreenState extends State<HomeScreen> {
   void dispose() {
     _controller.dispose();
     _searchController.dispose();
+    _taskConfettiController.dispose();
     super.dispose();
   }
 
@@ -70,6 +75,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        leading: Padding(
+          padding: const EdgeInsets.only(left: 14),
+          child: Image.asset(
+            'roulettereminderslogo.png',
+            width: 34,
+            height: 34,
+          ),
+        ),
+        leadingWidth: 56,
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -129,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             SafeArea(
               child: ResponsiveFrame(
-                maxWidth: 920,
+                maxWidth: 1320,
                 padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
                 child: userId == null
                     ? _buildEmptyState(
@@ -149,7 +163,8 @@ class _HomeScreenState extends State<HomeScreen> {
                             );
                           }
 
-                          if (snapshot.connectionState == ConnectionState.waiting) {
+                          if (snapshot.connectionState ==
+                              ConnectionState.waiting) {
                             return const Center(
                               child: CircularProgressIndicator(),
                             );
@@ -179,48 +194,125 @@ class _HomeScreenState extends State<HomeScreen> {
                           );
 
                           return StreamBuilder<CasinoProfile>(
-                            stream: CasinoService.instance.profileStream(userId),
+                            stream: CasinoService.instance.profileStream(
+                              userId,
+                            ),
                             builder: (context, rewardSnapshot) {
                               final casinoProfile =
                                   rewardSnapshot.data ?? CasinoProfile.empty;
 
-                              return Column(
-                                crossAxisAlignment: CrossAxisAlignment.stretch,
-                                children: [
-                                  _buildCommandDeck(),
-                                  const SizedBox(height: 14),
-                                  _buildOverviewPanel(
-                                    allEntries: entries,
-                                    visibleEntries: visibleEntries,
-                                    overview: overview,
-                                    profile: casinoProfile,
-                                    userId: userId,
-                                  ),
-                                  const SizedBox(height: 14),
-                                  Expanded(
-                                    child: _view == _HomeView.calendar
-                                        ? _buildCalendarSection(filteredEntries)
-                                        : visibleEntries.isEmpty
-                                        ? _buildEmptyState(
-                                            icon:
-                                                _statusFilter ==
-                                                    _TodoStatusFilter.completed
-                                                ? Icons.task_alt
-                                                : Icons.check_circle_outline,
-                                            text: _emptyStateMessage(
-                                              entries.isEmpty,
-                                            ),
-                                          )
-                                        : _buildTodoList(visibleEntries),
-                                  ),
-                                  const SizedBox(height: 14),
-                                  _buildAddTodoBar(userId),
-                                ],
+                              return LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final isDesktop =
+                                      constraints.maxWidth >= 1120;
+                                  final mainContent =
+                                      _view == _HomeView.calendar
+                                      ? _buildCalendarSection(filteredEntries)
+                                      : visibleEntries.isEmpty
+                                      ? _buildEmptyState(
+                                          icon:
+                                              _statusFilter ==
+                                                  _TodoStatusFilter.completed
+                                              ? Icons.task_alt
+                                              : Icons.check_circle_outline,
+                                          text: _emptyStateMessage(
+                                            entries.isEmpty,
+                                          ),
+                                        )
+                                      : _buildTodoList(visibleEntries);
+
+                                  if (!isDesktop) {
+                                    return Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.stretch,
+                                      children: [
+                                        _buildCommandDeck(),
+                                        const SizedBox(height: 14),
+                                        _buildOverviewPanel(
+                                          allEntries: entries,
+                                          visibleEntries: visibleEntries,
+                                          overview: overview,
+                                          profile: casinoProfile,
+                                          userId: userId,
+                                        ),
+                                        const SizedBox(height: 14),
+                                        Expanded(child: mainContent),
+                                        const SizedBox(height: 14),
+                                        _buildAddTodoBar(userId),
+                                      ],
+                                    );
+                                  }
+
+                                  return Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      SizedBox(
+                                        width: 320,
+                                        child: SingleChildScrollView(
+                                          child: _buildOverviewPanel(
+                                            allEntries: entries,
+                                            visibleEntries: visibleEntries,
+                                            overview: overview,
+                                            profile: casinoProfile,
+                                            userId: userId,
+                                            includeVault: false,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.stretch,
+                                          children: [
+                                            _buildCommandDeck(),
+                                            const SizedBox(height: 14),
+                                            Expanded(child: mainContent),
+                                            const SizedBox(height: 14),
+                                            _buildAddTodoBar(userId),
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      SizedBox(
+                                        width: 320,
+                                        child: SingleChildScrollView(
+                                          child: _buildVaultCard(
+                                            profile: casinoProfile,
+                                            userId: userId,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  );
+                                },
                               );
                             },
                           );
                         },
                       ),
+              ),
+            ),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  child: ConfettiWidget(
+                    confettiController: _taskConfettiController,
+                    blastDirectionality: BlastDirectionality.explosive,
+                    emissionFrequency: 0.09,
+                    numberOfParticles: 18,
+                    maxBlastForce: 22,
+                    minBlastForce: 10,
+                    gravity: 0.35,
+                    colors: [
+                      colorScheme.secondary,
+                      colorScheme.onSurface,
+                      const Color(0xFFFFD54F),
+                    ],
+                  ),
+                ),
               ),
             ),
           ],
@@ -433,6 +525,7 @@ class _HomeScreenState extends State<HomeScreen> {
     required DailyOverview overview,
     required CasinoProfile profile,
     required String userId,
+    bool includeVault = true,
   }) {
     final openCount = allEntries
         .where((entry) => !entry.todo.isCompleted)
@@ -466,8 +559,9 @@ class _HomeScreenState extends State<HomeScreen> {
           ).colorScheme.secondary.withValues(alpha: 0.25),
         ),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
+      child: Builder(
+        builder: (context) {
+          final focusPoints = overview.focusPoints.take(2).toList();
           final summary = Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -498,16 +592,16 @@ class _HomeScreenState extends State<HomeScreen> {
                   color: Theme.of(context).colorScheme.onSurfaceVariant,
                 ),
               ),
-              if (overview.focusPoints.isNotEmpty) ...[
+              if (focusPoints.isNotEmpty) ...[
                 const SizedBox(height: 8),
-                for (final point in overview.focusPoints.take(2)) ...[
+                for (var index = 0; index < focusPoints.length; index++) ...[
                   Text(
-                    '• $point',
+                    '• ${focusPoints[index]}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: Theme.of(context).colorScheme.onSurfaceVariant,
                     ),
                   ),
-                  if (point != overview.focusPoints.take(2).last)
+                  if (index != focusPoints.length - 1)
                     const SizedBox(height: 4),
                 ],
               ],
@@ -544,29 +638,34 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           );
 
-          final vaultCard = _buildVaultCard(profile: profile, userId: userId);
-
-          if (constraints.maxWidth < 760) {
-            return Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                summary,
-                const SizedBox(height: 14),
-                vaultCard,
-              ],
-            );
+          if (!includeVault) {
+            return summary;
           }
 
-          return Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: summary),
-              const SizedBox(width: 16),
-              SizedBox(
-                width: 250,
-                child: vaultCard,
-              ),
-            ],
+          final vaultCard = _buildVaultCard(profile: profile, userId: userId);
+
+          return LayoutBuilder(
+            builder: (context, constraints) {
+              if (constraints.maxWidth < 760) {
+                return Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    summary,
+                    const SizedBox(height: 14),
+                    vaultCard,
+                  ],
+                );
+              }
+
+              return Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: summary),
+                  const SizedBox(width: 16),
+                  SizedBox(width: 250, child: vaultCard),
+                ],
+              );
+            },
           );
         },
       ),
@@ -704,7 +803,6 @@ class _HomeScreenState extends State<HomeScreen> {
               }
 
               return Row(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   Expanded(child: spinButton),
                   const SizedBox(width: 10),
@@ -1334,6 +1432,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
 
     try {
+      final shouldCelebrate = value && !todo.isCompleted;
       final result = await TodoService.instance.toggleCompletion(
         todoId: todoId,
         todo: todo,
@@ -1343,7 +1442,17 @@ class _HomeScreenState extends State<HomeScreen> {
         return;
       }
 
+      if (shouldCelebrate) {
+        _taskConfettiController.play();
+      }
+
       if (result.spinAwarded) {
+        if (shouldCelebrate) {
+          await Future<void>.delayed(const Duration(milliseconds: 360));
+          if (!mounted) {
+            return;
+          }
+        }
         await _showRouletteDialog(
           userId: todo.userId,
           highlightUnlocked: true,

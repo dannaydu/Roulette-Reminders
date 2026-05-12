@@ -26,33 +26,36 @@ class _ChipBetDialogState extends State<ChipBetDialog>
     vsync: this,
     duration: const Duration(milliseconds: 650),
   );
-  late final Animation<Offset> _chipSlide = Tween<Offset>(
-    begin: const Offset(0, 0.3),
-    end: Offset.zero,
-  ).animate(
-    CurvedAnimation(
-      parent: _animationController,
-      curve: Curves.easeOutBack,
-    ),
-  );
-  late final Animation<double> _chipScale = Tween<double>(
-    begin: 0.8,
-    end: 1.05,
-  ).animate(
-    CurvedAnimation(
-      parent: _animationController,
-      curve: const Interval(0.0, 0.35, curve: Curves.easeOut),
-    ),
-  );
-  late final Animation<double> _glowOpacity = Tween<double>(
-    begin: 0.0,
-    end: 1.0,
-  ).animate(
-    CurvedAnimation(
-      parent: _animationController,
-      curve: const Interval(0.35, 1.0, curve: Curves.easeIn),
-    ),
-  );
+  late final Animation<Offset> _chipSlide =
+      Tween<Offset>(
+        begin: const Offset(0, 0.3),
+        end: Offset.zero,
+      ).animate(
+        CurvedAnimation(
+          parent: _animationController,
+          curve: Curves.easeOutBack,
+        ),
+      );
+  late final Animation<double> _chipScale =
+      Tween<double>(
+        begin: 0.8,
+        end: 1.05,
+      ).animate(
+        CurvedAnimation(
+          parent: _animationController,
+          curve: const Interval(0.0, 0.35, curve: Curves.easeOut),
+        ),
+      );
+  late final Animation<double> _glowOpacity =
+      Tween<double>(
+        begin: 0.0,
+        end: 1.0,
+      ).animate(
+        CurvedAnimation(
+          parent: _animationController,
+          curve: const Interval(0.35, 1.0, curve: Curves.easeIn),
+        ),
+      );
 
   @override
   void dispose() {
@@ -463,7 +466,7 @@ class _ChipBetDialogState extends State<ChipBetDialog>
                     shape: BoxShape.circle,
                     gradient: RadialGradient(
                       colors: [
-                        chipColor.withOpacity(0.22),
+                        chipColor.withValues(alpha: 0.22),
                         Colors.transparent,
                       ],
                       stops: const [0.0, 1.0],
@@ -479,7 +482,7 @@ class _ChipBetDialogState extends State<ChipBetDialog>
                   shape: BoxShape.circle,
                   boxShadow: [
                     BoxShadow(
-                      color: chipColor.withOpacity(0.26),
+                      color: chipColor.withValues(alpha: 0.26),
                       blurRadius: 18,
                       offset: const Offset(0, 10),
                     ),
@@ -490,12 +493,12 @@ class _ChipBetDialogState extends State<ChipBetDialog>
                     _lastResult!.choice == CasinoTableBetColor.green
                         ? 'G'
                         : _lastResult!.choice == CasinoTableBetColor.red
-                            ? 'R'
-                            : 'B',
+                        ? 'R'
+                        : 'B',
                     style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w900,
-                        ),
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                    ),
                   ),
                 ),
               ),
