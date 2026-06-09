@@ -6,6 +6,8 @@
 
 Roulette Reminders is a Flutter task manager with a casino-inspired reward loop. It combines Firebase authentication, Firestore-backed todos, file attachments, recurring reminders, and a roulette-style chip system that rewards completed work.
 
+Live app: https://todo-spring-2026-385ef.web.app/
+
 ## What the app does
 
 - Signs users in with Firebase email/password authentication.
